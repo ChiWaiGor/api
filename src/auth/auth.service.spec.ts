@@ -1,7 +1,4 @@
-import {
-  ConflictException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { UserStatus } from '@prisma/client';
@@ -128,7 +125,7 @@ describe('AuthService', () => {
     it('rejects when user is not active', async () => {
       prisma.user.findUnique.mockResolvedValue({
         ...activeUser,
-        status: UserStatus.SUSPENDED,
+        status: UserStatus.INACTIVE,
       });
       await expect(
         service.login({ email: 'a@b.com', password: 'x' }),
@@ -219,7 +216,7 @@ describe('AuthService', () => {
       prisma.refreshToken.findFirst.mockResolvedValue({ id: 'rt-1' });
       prisma.user.findUnique.mockResolvedValue({
         ...activeUser,
-        status: UserStatus.SUSPENDED,
+        status: UserStatus.INACTIVE,
       });
 
       await expect(

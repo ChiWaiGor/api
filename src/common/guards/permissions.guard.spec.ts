@@ -38,8 +38,12 @@ describe('PermissionsGuard', () => {
     }) as ExecutionContext;
 
   it('allows when no permissions are required', async () => {
-    reflector.getAllAndOverride.mockReturnValueOnce(undefined).mockReturnValueOnce('all');
-    await expect(guard.canActivate(createContext({ sub: 'u1' }))).resolves.toBe(true);
+    reflector.getAllAndOverride
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce('all');
+    await expect(guard.canActivate(createContext({ sub: 'u1' }))).resolves.toBe(
+      true,
+    );
   });
 
   it('denies when user lacks required permissions', async () => {
@@ -62,7 +66,9 @@ describe('PermissionsGuard', () => {
       PERMISSIONS.USERS_WRITE,
     ]);
 
-    await expect(guard.canActivate(createContext({ sub: 'u1' }))).resolves.toBe(true);
+    await expect(guard.canActivate(createContext({ sub: 'u1' }))).resolves.toBe(
+      true,
+    );
   });
 
   it('denies when user is missing', async () => {

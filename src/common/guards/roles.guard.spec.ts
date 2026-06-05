@@ -37,15 +37,11 @@ describe('RolesGuard', () => {
 
   it('allows when user has a required role', () => {
     reflector.getAllAndOverride.mockReturnValue(['admin', 'user']);
-    expect(
-      guard.canActivate(createContext({ roles: ['user'] })),
-    ).toBe(true);
+    expect(guard.canActivate(createContext({ roles: ['user'] }))).toBe(true);
   });
 
   it('denies when user lacks required roles', () => {
     reflector.getAllAndOverride.mockReturnValue(['admin']);
-    expect(
-      guard.canActivate(createContext({ roles: ['user'] })),
-    ).toBe(false);
+    expect(guard.canActivate(createContext({ roles: ['user'] }))).toBe(false);
   });
 });

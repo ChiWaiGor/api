@@ -22,10 +22,10 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const required = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const required = this.reflector.getAllAndOverride<string[]>(
+      PERMISSIONS_KEY,
+      [context.getHandler(), context.getClass()],
+    );
     if (!required?.length) {
       return true;
     }
@@ -36,7 +36,9 @@ export class PermissionsGuard implements CanActivate {
         context.getClass(),
       ]) ?? 'all';
 
-    const request = context.switchToHttp().getRequest<Request & { user: JwtPayload }>();
+    const request = context
+      .switchToHttp()
+      .getRequest<Request & { user: JwtPayload }>();
     const user = request.user;
     if (!user) {
       throw new ForbiddenException('Insufficient permissions');

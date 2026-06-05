@@ -1,6 +1,9 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
-import { emailSchema, passwordSchema } from '../common/schemas/primitives.schema';
+import {
+  emailSchema,
+  passwordSchema,
+} from '../common/schemas/primitives.schema';
 
 export const registerBodySchema = z.object({
   email: emailSchema,
@@ -42,5 +45,7 @@ export class RegisterBodyDto extends createZodDto(registerBodySchema) {}
 export class LoginBodyDto extends createZodDto(loginBodySchema) {}
 export class RefreshBodyDto extends createZodDto(refreshBodySchema) {}
 export class LogoutBodyDto extends createZodDto(logoutBodySchema) {}
-export class AuthTokensResponseDto extends createZodDto(authTokensResponseSchema) {}
+export class AuthTokensResponseDto extends createZodDto(
+  authTokensResponseSchema,
+) {}
 export class AuthMeResponseDto extends createZodDto(authMeResponseSchema) {}

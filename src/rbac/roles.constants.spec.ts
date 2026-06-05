@@ -18,9 +18,9 @@ describe('roles.constants', () => {
 
   describe('isProtectedPermissionForRole', () => {
     it('protects users:read on user role', () => {
-      expect(
-        isProtectedPermissionForRole('user', PERMISSIONS.USERS_READ),
-      ).toBe(true);
+      expect(isProtectedPermissionForRole('user', PERMISSIONS.USERS_READ)).toBe(
+        true,
+      );
     });
 
     it('protects all catalog permissions on admin role', () => {

@@ -164,9 +164,9 @@ describe('API (e2e)', () => {
         .expect(200)
         .expect((res) => {
           expect(Array.isArray(res.body)).toBe(true);
-          expect(res.body.some((r: { name: string }) => r.name === 'admin')).toBe(
-            true,
-          );
+          expect(
+            res.body.some((r: { name: string }) => r.name === 'admin'),
+          ).toBe(true);
         });
     });
 

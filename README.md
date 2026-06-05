@@ -76,6 +76,46 @@ curl -s -X POST http://localhost:3000/auth/logout \
   -d '{"refreshToken":"<refreshToken>"}'
 ```
 
+## Production deployment (Docker)
+
+The app ships as a multi-stage image (non-root, slim runtime, native `argon2`
+compiled in the build stage). `docker-compose.yml` includes `app` and a one-off
+`migrate` service alongside Postgres and Redis.
+
+```bash
+# Build + run migrations/seed once, then start the API
+docker compose build
+docker compose run --rm migrate      # prisma migrate deploy && db seed
+docker compose up -d app             # serves on http://localhost:${APP_PORT:-3000}
+```
+
+The container exposes a Docker `HEALTHCHECK` against `/health`, binds to
+`0.0.0.0`, and enables graceful shutdown hooks so Prisma/Redis disconnect on
+`SIGTERM` during rolling deploys.
+
+### Production hardening notes
+
+- **Swagger** defaults to **off**. Only set `SWAGGER_ENABLED=true` where you want
+  `/docs` exposed (typically non-production).
+- **Secrets**: rotate `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` (>= 32 chars) and
+  set a strong `SEED_ADMIN_PASSWORD`. Inject env from your orchestrator/secret
+  manager; never bake secrets into the image (`.env` is git- and docker-ignored).
+- **Database pooling**: tune `connection_limit` / `pool_timeout` on `DATABASE_URL`
+  so total connections across instances stay under Postgres `max_connections`.
+  Front with PgBouncer (transaction pooling) for higher fan-out; see
+  `.env.example`.
+- **Migrations** run as a discrete release step (`migrate` service /
+  `npm run prisma:deploy`), not at app boot.
+- **Logs**: sensitive fields (`authorization` header, passwords, tokens) are
+  redacted from structured logs.
+
+## CI
+
+`.github/workflows/ci.yml` runs on pushes/PRs to `main`: install -> Prisma
+generate -> lint -> typecheck -> build -> migrate + seed -> unit tests (with
+coverage) -> e2e (against Postgres/Redis service containers), plus a job that
+builds the Docker image.
+
 ## API overview
 
 | Module | Routes                                                                                                                       |
@@ -99,6 +139,11 @@ Mutations (create/update/delete roles, assign/unassign, attach/detach permission
 | `THROTTLE_TTL` / `THROTTLE_LIMIT` | required | Global default for protected routes |
 | `THROTTLE_AUTH_TTL` / `THROTTLE_AUTH_LIMIT` | 60000 ms / 10 | `POST /auth/register`, `POST /auth/login` |
 | (derived) | 2× `THROTTLE_AUTH_LIMIT` | `POST /auth/refresh` |
+
+Throttling counters are stored in **Redis** so limits are enforced consistently
+across multiple instances (the default in-memory store counts per process). If
+Redis is unreachable the throttler fails open (allows the request) to preserve
+availability; the auth/RBAC guards still protect the app.
 
 ## Redis resilience
 
@@ -126,9 +171,13 @@ src/
 | ------------------------ | ------------------------------- |
 | `npm run start:dev`      | Dev server with watch           |
 | `npm run build`          | Production build                |
+| `npm run lint`           | ESLint with autofix             |
+| `npm run lint:ci`        | ESLint without autofix (CI)     |
+| `npm run typecheck`      | `tsc --noEmit` type check       |
 | `npm run test`           | Unit tests                      |
 | `npm run test:e2e`       | E2E tests (requires DB + Redis) |
-| `npm run prisma:migrate` | Apply migrations                |
+| `npm run prisma:migrate` | Apply migrations (dev)          |
+| `npm run prisma:deploy`  | Apply migrations (prod)         |
 | `npm run prisma:seed`    | Seed roles, permissions, admin  |
 
 ## Tests

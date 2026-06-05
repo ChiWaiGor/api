@@ -10,8 +10,14 @@ export class RbacAuditService {
   constructor(private readonly prisma: PrismaService) {}
 
   async record(entry: RbacAuditEntry): Promise<void> {
-    const { action, context, targetUserId, targetRoleId, targetPermissionId, metadata } =
-      entry;
+    const {
+      action,
+      context,
+      targetUserId,
+      targetRoleId,
+      targetPermissionId,
+      metadata,
+    } = entry;
 
     const payload = {
       action,
@@ -29,7 +35,10 @@ export class RbacAuditService {
       await this.prisma.rbacAuditLog.create({ data: payload });
     } catch (error) {
       this.logger.error(
-        { err: error, audit: { action, actorId: context.actorId } },
+        {
+          err: error instanceof Error ? error : new Error(String(error)),
+          audit: { action, actorId: context.actorId },
+        },
         'Failed to persist RBAC audit log',
       );
     }

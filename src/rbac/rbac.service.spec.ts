@@ -38,7 +38,12 @@ describe('RbacService', () => {
       delete: jest.fn(),
     },
     permission: { findUnique: jest.fn(), findMany: jest.fn() },
-    userRole: { findMany: jest.fn(), create: jest.fn(), delete: jest.fn(), count: jest.fn() },
+    userRole: {
+      findMany: jest.fn(),
+      create: jest.fn(),
+      delete: jest.fn(),
+      count: jest.fn(),
+    },
     rolePermission: { create: jest.fn(), delete: jest.fn() },
   };
   const redis = {
@@ -180,7 +185,9 @@ describe('RbacService', () => {
       await service.listPermissions();
       expect(prisma.permission.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { action: { in: expect.arrayContaining([PERMISSIONS.USERS_READ]) } },
+          where: {
+            action: { in: expect.arrayContaining([PERMISSIONS.USERS_READ]) },
+          },
         }),
       );
     });
@@ -224,7 +231,10 @@ describe('RbacService', () => {
   describe('updateRole', () => {
     it('updates non-system role', async () => {
       prisma.role.findUnique.mockResolvedValue(customRole);
-      prisma.role.update.mockResolvedValue({ ...customRole, description: 'New' });
+      prisma.role.update.mockResolvedValue({
+        ...customRole,
+        description: 'New',
+      });
       await expect(
         service.updateRole('r1', { description: 'New' }, auditCtx),
       ).resolves.toMatchObject({ description: 'New' });
@@ -265,9 +275,9 @@ describe('RbacService', () => {
 
     it('rejects system role delete', async () => {
       prisma.role.findUnique.mockResolvedValue(adminRole);
-      await expect(service.deleteRole('admin-r', auditCtx)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
+      await expect(
+        service.deleteRole('admin-r', auditCtx),
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
     it('rejects delete when role has users', async () => {
@@ -284,26 +294,26 @@ describe('RbacService', () => {
 
     it('throws when user not found', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
-      await expect(service.assignRoleToUser(body, auditCtx)).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.assignRoleToUser(body, auditCtx),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('throws when role not found', async () => {
       prisma.user.findUnique.mockResolvedValue({ id: 'u1' });
       prisma.role.findUnique.mockResolvedValue(null);
-      await expect(service.assignRoleToUser(body, auditCtx)).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.assignRoleToUser(body, auditCtx),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('throws conflict when role already assigned', async () => {
       prisma.user.findUnique.mockResolvedValue({ id: 'u1' });
       prisma.role.findUnique.mockResolvedValue(customRole);
       prisma.userRole.create.mockRejectedValue(new Error('unique'));
-      await expect(service.assignRoleToUser(body, auditCtx)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.assignRoleToUser(body, auditCtx),
+      ).rejects.toBeInstanceOf(ConflictException);
       expect(audit.record).not.toHaveBeenCalled();
     });
 
@@ -342,9 +352,9 @@ describe('RbacService', () => {
       prisma.role.findUnique.mockResolvedValue(adminRole);
       prisma.userRole.count.mockResolvedValue(1);
 
-      await expect(service.unassignRoleFromUser(body, auditCtx)).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.unassignRoleFromUser(body, auditCtx),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('unassigns when multiple admins exist', async () => {
@@ -353,7 +363,9 @@ describe('RbacService', () => {
       prisma.userRole.count.mockResolvedValue(2);
       prisma.userRole.delete.mockResolvedValue({});
 
-      await expect(service.unassignRoleFromUser(body, auditCtx)).resolves.toEqual({
+      await expect(
+        service.unassignRoleFromUser(body, auditCtx),
+      ).resolves.toEqual({
         success: true,
       });
     });
@@ -364,9 +376,9 @@ describe('RbacService', () => {
 
     it('throws when role not found', async () => {
       prisma.role.findUnique.mockResolvedValue(null);
-      await expect(service.attachPermissionToRole(body, auditCtx)).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.attachPermissionToRole(body, auditCtx),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('rejects permissions outside catalog', async () => {
@@ -376,9 +388,9 @@ describe('RbacService', () => {
         action: 'custom:action',
       });
 
-      await expect(service.attachPermissionToRole(body, auditCtx)).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.attachPermissionToRole(body, auditCtx),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('attaches catalog permission and invalidates caches', async () => {
@@ -391,7 +403,9 @@ describe('RbacService', () => {
       prisma.userRole.findMany.mockResolvedValue([{ userId: 'u1' }]);
       redis.del.mockResolvedValue(1);
 
-      await expect(service.attachPermissionToRole(body, auditCtx)).resolves.toEqual({
+      await expect(
+        service.attachPermissionToRole(body, auditCtx),
+      ).resolves.toEqual({
         success: true,
       });
     });
@@ -404,9 +418,9 @@ describe('RbacService', () => {
       });
       prisma.rolePermission.create.mockRejectedValue(new Error('unique'));
 
-      await expect(service.attachPermissionToRole(body, auditCtx)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.attachPermissionToRole(body, auditCtx),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
   });
 
@@ -436,9 +450,9 @@ describe('RbacService', () => {
         action: PERMISSIONS.USERS_READ,
       });
 
-      await expect(service.detachPermissionFromRole(body, auditCtx)).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.detachPermissionFromRole(body, auditCtx),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('blocks detaching catalog permission from admin role', async () => {
@@ -448,9 +462,9 @@ describe('RbacService', () => {
         action: PERMISSIONS.USERS_DELETE,
       });
 
-      await expect(service.detachPermissionFromRole(body, auditCtx)).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.detachPermissionFromRole(body, auditCtx),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(prisma.rolePermission.delete).not.toHaveBeenCalled();
     });
 

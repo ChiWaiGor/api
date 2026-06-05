@@ -17,29 +17,25 @@ export const envSchema = z.object({
   ARGON2_MEMORY_KB: z.coerce.number().int().positive().default(65536),
   ARGON2_TIME_COST: z.coerce.number().int().positive().default(3),
   ARGON2_PARALLELISM: z.coerce.number().int().positive().default(4),
-  CORS_ORIGINS: z
-    .string()
-    .transform((s) =>
-      s
-        .split(',')
-        .map((o) => o.trim())
-        .filter(Boolean),
-    ),
+  CORS_ORIGINS: z.string().transform((s) =>
+    s
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean),
+  ),
   THROTTLE_TTL: z.coerce.number().int().positive(),
   THROTTLE_LIMIT: z.coerce.number().int().positive(),
   THROTTLE_AUTH_TTL: z.coerce.number().int().positive().default(60000),
   THROTTLE_AUTH_LIMIT: z.coerce.number().int().positive().default(10),
-  PERMISSION_CACHE_TTL_SECONDS: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(300),
+  PERMISSION_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   SEED_ADMIN_EMAIL: z.string().email().optional(),
   SEED_ADMIN_PASSWORD: z.string().min(8).optional(),
+  // Defaults to off so production never exposes /docs unless explicitly opted
+  // in. Local/dev environments enable it via .env (see .env.example).
   SWAGGER_ENABLED: z
     .string()
     .optional()
-    .default('true')
+    .default('false')
     .transform((v) => v === 'true' || v === '1'),
 });
 

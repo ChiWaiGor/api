@@ -58,6 +58,10 @@ export class PermissionParamsDto extends createZodDto(permissionParamsSchema) {}
 export class CreateRoleBodyDto extends createZodDto(createRoleBodySchema) {}
 export class UpdateRoleBodyDto extends createZodDto(updateRoleBodySchema) {}
 export class AssignRoleBodyDto extends createZodDto(assignRoleBodySchema) {}
-export class AttachPermissionBodyDto extends createZodDto(attachPermissionBodySchema) {}
+export class AttachPermissionBodyDto extends createZodDto(
+  attachPermissionBodySchema,
+) {}
 export class RoleResponseDto extends createZodDto(roleResponseSchema) {}
-export class PermissionResponseDto extends createZodDto(permissionResponseSchema) {}
+export class PermissionResponseDto extends createZodDto(
+  permissionResponseSchema,
+) {}

@@ -49,9 +49,7 @@ export class AuthService {
       data: {
         email: body.email,
         passwordHash,
-        roles: userRole
-          ? { create: [{ roleId: userRole.id }] }
-          : undefined,
+        roles: userRole ? { create: [{ roleId: userRole.id }] } : undefined,
       },
       include: { roles: { include: { role: true } } },
     });
@@ -88,9 +86,12 @@ export class AuthService {
   async refresh(body: RefreshBody) {
     let payload: JwtRefreshPayload;
     try {
-      payload = await this.jwt.verifyAsync<JwtRefreshPayload>(body.refreshToken, {
-        secret: this.config.get('JWT_REFRESH_SECRET', { infer: true }),
-      });
+      payload = await this.jwt.verifyAsync<JwtRefreshPayload>(
+        body.refreshToken,
+        {
+          secret: this.config.get('JWT_REFRESH_SECRET', { infer: true }),
+        },
+      );
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -204,8 +205,7 @@ export class AuthService {
     email: string,
     roles?: string[],
   ) {
-    const resolvedRoles =
-      roles ?? (await this.rbac.getUserRoles(userId));
+    const resolvedRoles = roles ?? (await this.rbac.getUserRoles(userId));
     const accessJti = randomUUID();
     const refreshJti = randomUUID();
 

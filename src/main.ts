@@ -21,6 +21,10 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Ensure Prisma/Redis disconnect and in-flight work drains on SIGTERM/SIGINT
+  // (e.g. rolling deploys, container stop) instead of being killed abruptly.
+  app.enableShutdownHooks();
+
   if (config.get('SWAGGER_ENABLED', { infer: true })) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('API')
@@ -34,7 +38,7 @@ async function bootstrap() {
     SwaggerModule.setup('docs', app, document);
   }
 
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 }
 
 void bootstrap();

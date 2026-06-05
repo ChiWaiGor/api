@@ -30,10 +30,7 @@ describe('JwtAuthGuard', () => {
   it('delegates to passport for protected routes', () => {
     reflector.getAllAndOverride.mockReturnValue(false);
     const parentActivate = jest
-      .spyOn(
-        Object.getPrototypeOf(JwtAuthGuard.prototype),
-        'canActivate',
-      )
+      .spyOn(Object.getPrototypeOf(JwtAuthGuard.prototype), 'canActivate')
       .mockReturnValue(true);
 
     expect(guard.canActivate(createContext())).toBe(true);

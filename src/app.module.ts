@@ -12,6 +12,7 @@ import { ZodValidationExceptionFilter } from './common/filters/zod-validation-ex
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { RedisThrottlerStorage } from './common/throttler/redis-throttler-storage';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RbacModule } from './rbac/rbac.module';
@@ -38,30 +39,55 @@ const ZodValidationPipe = createZodValidationPipe({
         autoLogging: true,
         genReqId: (req) =>
           (req.headers['x-request-id'] as string) ?? crypto.randomUUID(),
+        redact: {
+          paths: [
+            'req.headers.authorization',
+            'req.headers.cookie',
+            'req.headers["x-api-key"]',
+            'req.body.password',
+            'req.body.currentPassword',
+            'req.body.newPassword',
+            'req.body.refreshToken',
+            'req.body.accessToken',
+            'res.headers["set-cookie"]',
+          ],
+          remove: true,
+        },
       },
     }),
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService<Env, true>) => ({
-        throttlers: [
-          {
-            name: 'default',
-            ttl: config.get('THROTTLE_TTL', { infer: true }),
-            limit: config.get('THROTTLE_LIMIT', { infer: true }),
-          },
-          {
-            name: 'auth',
-            ttl: config.get('THROTTLE_AUTH_TTL', { infer: true }),
-            limit: config.get('THROTTLE_AUTH_LIMIT', { infer: true }),
-          },
-          {
-            name: 'auth-refresh',
-            ttl: config.get('THROTTLE_AUTH_TTL', { infer: true }),
-            limit: config.get('THROTTLE_AUTH_LIMIT', { infer: true }) * 2,
-          },
-        ],
-      }),
+      useFactory: (config: ConfigService<Env, true>) => {
+        const password = config.get('REDIS_PASSWORD', { infer: true });
+        return {
+          throttlers: [
+            {
+              name: 'default',
+              ttl: config.get('THROTTLE_TTL', { infer: true }),
+              limit: config.get('THROTTLE_LIMIT', { infer: true }),
+            },
+            {
+              name: 'auth',
+              ttl: config.get('THROTTLE_AUTH_TTL', { infer: true }),
+              limit: config.get('THROTTLE_AUTH_LIMIT', { infer: true }),
+            },
+            {
+              name: 'auth-refresh',
+              ttl: config.get('THROTTLE_AUTH_TTL', { infer: true }),
+              limit: config.get('THROTTLE_AUTH_LIMIT', { infer: true }) * 2,
+            },
+          ],
+          storage: new RedisThrottlerStorage({
+            host: config.get('REDIS_HOST', { infer: true }),
+            port: config.get('REDIS_PORT', { infer: true }),
+            password: password || undefined,
+            db: config.get('REDIS_DB', { infer: true }),
+            maxRetriesPerRequest: 1,
+            lazyConnect: true,
+          }),
+        };
+      },
     }),
     PrismaModule,
     RedisModule,

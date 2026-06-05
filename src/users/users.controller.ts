@@ -38,7 +38,9 @@ export class UsersController {
 
   @RequirePermissions([PERMISSIONS.USERS_READ])
   @Get()
-  findAll(@Query() query: ListUsersQueryDto): Promise<PaginatedUsersResponseDto> {
+  findAll(
+    @Query() query: ListUsersQueryDto,
+  ): Promise<PaginatedUsersResponseDto> {
     return this.usersService.findAll(query);
   }
 

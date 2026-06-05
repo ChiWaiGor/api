@@ -337,13 +337,17 @@ export class RbacService {
 
   private assertPermissionInCatalog(action: string): void {
     if (!ALL_PERMISSIONS_SET.has(action)) {
-      throw new BadRequestException('Permission is not defined in the application');
+      throw new BadRequestException(
+        'Permission is not defined in the application',
+      );
     }
   }
 
   private assertRoleIsMutable(role: Role): void {
     if (role.isSystem) {
-      throw new ForbiddenException('System roles cannot be modified or deleted');
+      throw new ForbiddenException(
+        'System roles cannot be modified or deleted',
+      );
     }
   }
 

@@ -1,0 +1,32 @@
+node_modules
+dist
+build
+coverage
+.nyc_output
+
+# env / secrets
+.env
+.env.local
+.env.*.local
+
+# vcs / ci / editor
+.git
+.github
+.gitignore
+.idea
+.vscode
+.cursor
+
+# logs
+logs
+*.log
+npm-debug.log*
+
+# os
+.DS_Store
+
+# docs / misc
+*.md
+Dockerfile
+.dockerignore
+docker-compose.yml

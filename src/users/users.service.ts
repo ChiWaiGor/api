@@ -151,7 +151,7 @@ export class UsersService {
       where: { id },
       data: {
         email: body.email,
-        status: body.status as UserStatus | undefined,
+        status: body.status,
         passwordHash: body.password
           ? await this.crypto.hash(body.password)
           : undefined,

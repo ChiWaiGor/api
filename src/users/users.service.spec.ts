@@ -172,12 +172,9 @@ describe('UsersService', () => {
         .mockResolvedValueOnce(userRow)
         .mockResolvedValueOnce({ id: 'other' });
       await expect(
-        service.update(
-          'user-1',
-          { email: 'taken@b.com' },
-          'user-1',
-          [PERMISSIONS.USERS_WRITE],
-        ),
+        service.update('user-1', { email: 'taken@b.com' }, 'user-1', [
+          PERMISSIONS.USERS_WRITE,
+        ]),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
@@ -187,12 +184,7 @@ describe('UsersService', () => {
       prisma.user.update.mockResolvedValue(userRow);
       prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
 
-      await service.update(
-        'user-1',
-        { password: 'NewSecure1' },
-        'user-1',
-        [],
-      );
+      await service.update('user-1', { password: 'NewSecure1' }, 'user-1', []);
 
       expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
         where: { userId: 'user-1', revokedAt: null },

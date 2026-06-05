@@ -92,7 +92,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return JSON.parse(raw) as T;
   }
 
-  async setJson(key: string, value: unknown, ttlSeconds?: number): Promise<void> {
+  async setJson(
+    key: string,
+    value: unknown,
+    ttlSeconds?: number,
+  ): Promise<void> {
     const serialized = JSON.stringify(value);
     if (ttlSeconds) {
       await this.setex(key, ttlSeconds, serialized);

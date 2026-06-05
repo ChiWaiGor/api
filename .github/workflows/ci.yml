@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint, typecheck, build & test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://app:app@localhost:5432/app?schema=public
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      JWT_ACCESS_SECRET: ci-access-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_SECRET: ci-refresh-secret-bbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      JWT_REFRESH_TTL: 7d
+      CORS_ORIGINS: http://localhost:3000
+      THROTTLE_TTL: 60000
+      THROTTLE_LIMIT: 100
+      THROTTLE_AUTH_TTL: 60000
+      THROTTLE_AUTH_LIMIT: 10
+      PERMISSION_CACHE_TTL_SECONDS: 300
+      SEED_ADMIN_EMAIL: admin@example.com
+      SEED_ADMIN_PASSWORD: Admin123!@#
+      SWAGGER_ENABLED: 'false'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Lint
+        run: npm run lint:ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Apply migrations
+        run: npm run prisma:deploy
+
+      - name: Seed database
+        run: npm run prisma:seed
+
+      - name: Unit tests
+        run: npm run test:cov
+
+      - name: E2E tests
+        run: npm run test:e2e
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
