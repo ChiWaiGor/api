@@ -82,6 +82,20 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  /**
+   * Atomically increments a counter and (on first increment) sets a TTL window.
+   * Returns the new counter value. Used for brute-force/lockout tracking.
+   */
+  async incrWithTtl(key: string, ttlSeconds: number): Promise<number> {
+    return this.execute(async () => {
+      const count = await this.client.incr(key);
+      if (count === 1) {
+        await this.client.expire(key, ttlSeconds);
+      }
+      return count;
+    });
+  }
+
   async exists(key: string): Promise<boolean> {
     return this.execute(async () => (await this.client.exists(key)) === 1);
   }

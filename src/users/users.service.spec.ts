@@ -26,6 +26,7 @@ describe('UsersService', () => {
     },
     role: { findUnique: jest.fn(), findMany: jest.fn() },
     refreshToken: { updateMany: jest.fn() },
+    $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
   };
   const crypto = { hash: jest.fn() };
   const rbac = { invalidateUserPermissionCache: jest.fn() };
@@ -79,7 +80,10 @@ describe('UsersService', () => {
       await service.findAll({ page: 1, limit: 10, search: 'admin' });
 
       expect(prisma.user.count).toHaveBeenCalledWith({
-        where: { email: { contains: 'admin', mode: 'insensitive' } },
+        where: {
+          deletedAt: null,
+          email: { contains: 'admin', mode: 'insensitive' },
+        },
       });
     });
   });
@@ -202,13 +206,28 @@ describe('UsersService', () => {
       );
     });
 
-    it('deletes user and invalidates cache', async () => {
+    it('soft deletes the user, revokes tokens, and invalidates cache', async () => {
       prisma.user.findUnique.mockResolvedValue(userRow);
-      prisma.user.delete.mockResolvedValue(userRow);
+      prisma.user.update.mockResolvedValue(userRow);
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
 
       await expect(service.remove('user-1')).resolves.toEqual({
         success: true,
       });
+
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'user-1' },
+          data: { deletedAt: expect.any(Date) },
+        }),
+      );
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: 'user-1', revokedAt: null },
+          data: { revokedAt: expect.any(Date) },
+        }),
+      );
+      expect(prisma.user.delete).not.toHaveBeenCalled();
       expect(rbac.invalidateUserPermissionCache).toHaveBeenCalledWith('user-1');
     });
   });

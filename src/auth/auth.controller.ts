@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -8,10 +16,14 @@ import { AuthService } from './auth.service';
 import {
   AuthMeResponseDto,
   AuthTokensResponseDto,
+  EmailVerificationConfirmDto,
   LoginBodyDto,
   LogoutBodyDto,
+  PasswordResetConfirmDto,
+  PasswordResetRequestDto,
   RefreshBodyDto,
   RegisterBodyDto,
+  SuccessResponseDto,
 } from './auth.schema';
 
 @ApiTags('auth')
@@ -51,6 +63,51 @@ export class AuthController {
     @CurrentUser() user: { sub: string; jti: string },
   ): Promise<{ success: boolean }> {
     return this.authService.logout(body, user.jti);
+  }
+
+  @Public()
+  @SkipThrottle({ default: true })
+  @Throttle({ auth: {} })
+  @HttpCode(HttpStatus.OK)
+  @Post('password-reset/request')
+  requestPasswordReset(
+    @Body() body: PasswordResetRequestDto,
+  ): Promise<SuccessResponseDto> {
+    return this.authService.requestPasswordReset(body);
+  }
+
+  @Public()
+  @SkipThrottle({ default: true })
+  @Throttle({ auth: {} })
+  @HttpCode(HttpStatus.OK)
+  @Post('password-reset/confirm')
+  confirmPasswordReset(
+    @Body() body: PasswordResetConfirmDto,
+  ): Promise<SuccessResponseDto> {
+    return this.authService.confirmPasswordReset(body);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @SkipThrottle({ default: true })
+  @Throttle({ auth: {} })
+  @HttpCode(HttpStatus.OK)
+  @Post('email-verification/request')
+  requestEmailVerification(
+    @CurrentUser() user: { sub: string },
+  ): Promise<SuccessResponseDto> {
+    return this.authService.requestEmailVerification(user.sub);
+  }
+
+  @Public()
+  @SkipThrottle({ default: true })
+  @Throttle({ auth: {} })
+  @HttpCode(HttpStatus.OK)
+  @Post('email-verification/confirm')
+  confirmEmailVerification(
+    @Body() body: EmailVerificationConfirmDto,
+  ): Promise<SuccessResponseDto> {
+    return this.authService.confirmEmailVerification(body);
   }
 
   @UseGuards(JwtAuthGuard)

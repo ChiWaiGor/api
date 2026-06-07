@@ -9,11 +9,12 @@ import { Env } from './config/env.schema';
 import { AuthModule } from './auth/auth.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ZodValidationExceptionFilter } from './common/filters/zod-validation-exception.filter';
+import { EmailVerifiedGuard } from './common/guards/email-verified.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
-import { RolesGuard } from './common/guards/roles.guard';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler-storage';
 import { HealthModule } from './health/health.module';
+import { MailModule } from './mail/mail.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RbacModule } from './rbac/rbac.module';
 import { RedisModule } from './redis/redis.module';
@@ -91,6 +92,7 @@ const ZodValidationPipe = createZodValidationPipe({
     }),
     PrismaModule,
     RedisModule,
+    MailModule,
     HealthModule,
     AuthModule,
     UsersModule,
@@ -100,8 +102,8 @@ const ZodValidationPipe = createZodValidationPipe({
     { provide: APP_PIPE, useClass: ZodValidationPipe },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
-    { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
+    { provide: APP_GUARD, useClass: EmailVerifiedGuard },
     { provide: APP_FILTER, useClass: ZodValidationExceptionFilter },
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
   ],

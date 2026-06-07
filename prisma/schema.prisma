@@ -24,14 +24,20 @@ enum RbacAuditAction {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
-  passwordHash  String
-  status        UserStatus     @default(ACTIVE)
-  roles         UserRole[]
-  refreshTokens RefreshToken[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id                     String                  @id @default(cuid())
+  email                  String                  @unique
+  passwordHash           String
+  status                 UserStatus              @default(ACTIVE)
+  emailVerifiedAt        DateTime?
+  deletedAt              DateTime?
+  roles                  UserRole[]
+  refreshTokens          RefreshToken[]
+  passwordResetTokens    PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  @@index([deletedAt])
 }
 
 model Role {
@@ -95,6 +101,7 @@ model RbacAuditLog {
 model RefreshToken {
   id        String    @id @default(cuid())
   userId    String
+  familyId  String
   tokenHash String
   expiresAt DateTime
   revokedAt DateTime?
@@ -103,4 +110,29 @@ model RefreshToken {
 
   @@index([userId])
   @@index([tokenHash])
+  @@index([familyId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

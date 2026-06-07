@@ -1,4 +1,5 @@
 export const redisKeys = {
   accessBlacklist: (jti: string) => `blacklist:access:${jti}`,
   permissionCache: (userId: string) => `cache:permissions:${userId}`,
+  failedLogins: (email: string) => `auth:failed-logins:${email}`,
 } as const;

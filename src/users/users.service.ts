@@ -28,9 +28,12 @@ export class UsersService {
     const { page, limit, search } = query;
     const skip = (page - 1) * limit;
 
-    const where = search
-      ? { email: { contains: search, mode: 'insensitive' as const } }
-      : {};
+    const where = {
+      deletedAt: null,
+      ...(search
+        ? { email: { contains: search, mode: 'insensitive' as const } }
+        : {}),
+    };
 
     const [total, users] = await Promise.all([
       this.prisma.user.count({ where }),
@@ -68,7 +71,7 @@ export class UsersService {
       where: { id },
       include: { roles: { include: { role: true } } },
     });
-    if (!user) throw new NotFoundException('User not found');
+    if (!user || user.deletedAt) throw new NotFoundException('User not found');
     return this.toResponse(user);
   }
 
@@ -138,7 +141,7 @@ export class UsersService {
     }
 
     const user = await this.prisma.user.findUnique({ where: { id } });
-    if (!user) throw new NotFoundException('User not found');
+    if (!user || user.deletedAt) throw new NotFoundException('User not found');
 
     if (body.email && body.email !== user.email) {
       const existing = await this.prisma.user.findUnique({
@@ -172,8 +175,21 @@ export class UsersService {
 
   async remove(id: string) {
     const user = await this.prisma.user.findUnique({ where: { id } });
-    if (!user) throw new NotFoundException('User not found');
-    await this.prisma.user.delete({ where: { id } });
+    if (!user || user.deletedAt) throw new NotFoundException('User not found');
+
+    // Soft delete: preserve the row (and its audit/FK history) while making the
+    // account unusable. Auth paths reject users with a non-null deletedAt.
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
     await this.rbac.invalidateUserPermissionCache(id);
     return { success: true };
   }

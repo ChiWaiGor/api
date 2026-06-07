@@ -23,6 +23,23 @@ export const logoutBodySchema = z.object({
   refreshToken: z.string().min(1, 'Refresh token is required'),
 });
 
+export const passwordResetRequestSchema = z.object({
+  email: emailSchema,
+});
+
+export const passwordResetConfirmSchema = z.object({
+  token: z.string().min(1, 'Token is required'),
+  newPassword: passwordSchema,
+});
+
+export const emailVerificationConfirmSchema = z.object({
+  token: z.string().min(1, 'Token is required'),
+});
+
+export const successResponseSchema = z.object({
+  success: z.boolean(),
+});
+
 export const authTokensResponseSchema = z.object({
   accessToken: z.string(),
   refreshToken: z.string(),
@@ -32,6 +49,7 @@ export const authMeResponseSchema = z.object({
   id: z.string(),
   email: z.string().email(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'LOCKED']),
+  emailVerified: z.boolean(),
   roles: z.array(z.string()),
   permissions: z.array(z.string()),
 });
@@ -40,12 +58,31 @@ export type RegisterBody = z.infer<typeof registerBodySchema>;
 export type LoginBody = z.infer<typeof loginBodySchema>;
 export type RefreshBody = z.infer<typeof refreshBodySchema>;
 export type LogoutBody = z.infer<typeof logoutBodySchema>;
+export type PasswordResetRequestBody = z.infer<
+  typeof passwordResetRequestSchema
+>;
+export type PasswordResetConfirmBody = z.infer<
+  typeof passwordResetConfirmSchema
+>;
+export type EmailVerificationConfirmBody = z.infer<
+  typeof emailVerificationConfirmSchema
+>;
 
 export class RegisterBodyDto extends createZodDto(registerBodySchema) {}
 export class LoginBodyDto extends createZodDto(loginBodySchema) {}
 export class RefreshBodyDto extends createZodDto(refreshBodySchema) {}
 export class LogoutBodyDto extends createZodDto(logoutBodySchema) {}
+export class PasswordResetRequestDto extends createZodDto(
+  passwordResetRequestSchema,
+) {}
+export class PasswordResetConfirmDto extends createZodDto(
+  passwordResetConfirmSchema,
+) {}
+export class EmailVerificationConfirmDto extends createZodDto(
+  emailVerificationConfirmSchema,
+) {}
 export class AuthTokensResponseDto extends createZodDto(
   authTokensResponseSchema,
 ) {}
 export class AuthMeResponseDto extends createZodDto(authMeResponseSchema) {}
+export class SuccessResponseDto extends createZodDto(successResponseSchema) {}
