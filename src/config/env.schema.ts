@@ -51,9 +51,19 @@ export const envSchema = z
     // Base URL used to build links in outbound emails (reset/verification).
     APP_BASE_URL: z.string().url().default('http://localhost:3000'),
     // Mail provider abstraction. 'log' writes messages to the logger (default,
-    // dev/test); real adapters (smtp/ses/resend) can be wired in MailModule.
+    // dev/test); 'smtp' sends via nodemailer (Mailpit locally, SES/SendGrid/etc.
+    // in production).
     MAIL_TRANSPORT: z.enum(['log', 'smtp']).default('log'),
     MAIL_FROM: z.string().default('no-reply@example.com'),
+    SMTP_HOST: z.string().default('localhost'),
+    SMTP_PORT: z.coerce.number().int().positive().default(1025),
+    SMTP_USER: z.string().optional().default(''),
+    SMTP_PASSWORD: z.string().optional().default(''),
+    SMTP_SECURE: z
+      .string()
+      .optional()
+      .default('false')
+      .transform((v) => v === 'true' || v === '1'),
     SEED_ADMIN_EMAIL: z.string().email().optional(),
     SEED_ADMIN_PASSWORD: z.string().min(8).optional(),
     // Defaults to off so production never exposes /docs unless explicitly opted

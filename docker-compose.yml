@@ -16,6 +16,13 @@ services:
       timeout: 5s
       retries: 10
 
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -63,6 +70,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-app}?schema=public
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
     ports:
       - '${APP_PORT:-3000}:3000'
     depends_on:

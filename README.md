@@ -43,6 +43,44 @@ npm run start:dev
 - Swagger (if `SWAGGER_ENABLED=true`): [http://localhost:3000/docs](http://localhost:3000/docs)
 - Health: [http://localhost:3000/health](http://localhost:3000/health)
 - Readiness: [http://localhost:3000/health/ready](http://localhost:3000/health/ready)
+- Mailpit UI (if running): [http://localhost:8025](http://localhost:8025)
+
+## Local mail testing (Mailpit)
+
+Outbound mail (password reset, email verification) uses a provider-agnostic
+`MailService`. By default messages are written to the app logger
+(`MAIL_TRANSPORT=log`). To capture real SMTP traffic locally:
+
+```bash
+docker compose up -d mailpit
+```
+
+Set in `.env`:
+
+```env
+MAIL_TRANSPORT=smtp
+SMTP_HOST=localhost
+SMTP_PORT=1025
+SMTP_SECURE=false
+```
+
+Restart the API, trigger a mail flow (e.g. `POST /auth/password-reset/request`),
+then open [http://localhost:8025](http://localhost:8025) to read the message.
+
+The same SMTP adapter works in production with your provider's host, port,
+credentials, and TLS settings (SendGrid, Amazon SES, Postmark, etc.). When
+running the app via `docker compose up app`, `SMTP_HOST` is overridden to
+`mailpit` automatically.
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `MAIL_TRANSPORT` | `log` | `log` or `smtp` |
+| `MAIL_FROM` | `no-reply@example.com` | From address |
+| `SMTP_HOST` | `localhost` | SMTP server host |
+| `SMTP_PORT` | `1025` | SMTP server port |
+| `SMTP_USER` | _(empty)_ | SMTP username (optional for Mailpit) |
+| `SMTP_PASSWORD` | _(empty)_ | SMTP password |
+| `SMTP_SECURE` | `false` | Use TLS on connect (typically `true` for port 465) |
 
 ## Default admin (after seed)
 
@@ -162,6 +200,7 @@ src/
 ├── users/            # user.schema.ts
 ├── rbac/             # permissions, roles, audit
 ├── redis/            # ioredis service
+├── mail/             # MailService (log + SMTP transports)
 └── prisma/           # Prisma service
 ```
 
