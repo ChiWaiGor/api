@@ -16,6 +16,7 @@ import { RedisService } from '../redis/redis.service';
 import { RbacService } from '../rbac/rbac.service';
 import { AuthCryptoService } from './auth-crypto.service';
 import type {
+  ChangePasswordBody,
   EmailVerificationConfirmBody,
   LoginBody,
   LogoutBody,
@@ -263,6 +264,36 @@ export class AuthService {
     return { success: true };
   }
 
+  async changePassword(userId: string, body: ChangePasswordBody) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.deletedAt) {
+      throw new UnauthorizedException();
+    }
+
+    const valid = await this.crypto.verify(
+      user.passwordHash,
+      body.currentPassword,
+    );
+    if (!valid) {
+      throw new UnauthorizedException('Invalid current password');
+    }
+
+    const passwordHash = await this.crypto.hash(body.newPassword);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    return { success: true };
+  }
+
   async confirmPasswordReset(body: PasswordResetConfirmBody) {
     const tokenHash = this.hashToken(body.token);
     const record = await this.prisma.passwordResetToken.findUnique({
@@ -467,6 +498,10 @@ export class AuthService {
     id: string;
     email: string;
   }): Promise<void> {
+    await this.prisma.emailVerificationToken.deleteMany({
+      where: { userId: user.id, usedAt: null },
+    });
+
     const { token, tokenHash } = this.generateSecret();
     const ttlMinutes = this.config.get('EMAIL_VERIFICATION_TTL_MINUTES', {
       infer: true,

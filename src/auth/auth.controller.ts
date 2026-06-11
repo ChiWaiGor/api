@@ -15,6 +15,7 @@ import { AuthService } from './auth.service';
 import {
   AuthMeResponseDto,
   AuthTokensResponseDto,
+  ChangePasswordDto,
   EmailVerificationConfirmDto,
   LoginBodyDto,
   LogoutBodyDto,
@@ -114,5 +115,17 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: { sub: string }): Promise<AuthMeResponseDto> {
     return this.authService.getMe(user.sub);
+  }
+
+  @ApiBearerAuth()
+  @SkipThrottle({ default: true })
+  @Throttle({ auth: {} })
+  @HttpCode(HttpStatus.OK)
+  @Post('change-password')
+  changePassword(
+    @Body() body: ChangePasswordDto,
+    @CurrentUser() user: { sub: string },
+  ): Promise<SuccessResponseDto> {
+    return this.authService.changePassword(user.sub, body);
   }
 }

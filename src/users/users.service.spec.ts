@@ -7,6 +7,7 @@ import {
 import { UserStatus } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthCryptoService } from '../auth/auth-crypto.service';
+import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PERMISSIONS } from '../rbac/permissions.constants';
 import { RbacService } from '../rbac/rbac.service';
@@ -29,6 +30,7 @@ describe('UsersService', () => {
     $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
   };
   const crypto = { hash: jest.fn() };
+  const auth = { requestEmailVerification: jest.fn() };
   const rbac = { invalidateUserPermissionCache: jest.fn() };
 
   const userRow = {
@@ -46,6 +48,7 @@ describe('UsersService', () => {
         UsersService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuthCryptoService, useValue: crypto },
+        { provide: AuthService, useValue: auth },
         { provide: RbacService, useValue: rbac },
       ],
     }).compile();
@@ -182,19 +185,92 @@ describe('UsersService', () => {
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
-    it('revokes refresh tokens when password changes', async () => {
+    it('rejects self password change', async () => {
+      prisma.user.findUnique.mockResolvedValue(userRow);
+
+      await expect(
+        service.update('user-1', { password: 'NewSecure1' }, 'user-1', []),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects self status change', async () => {
+      prisma.user.findUnique.mockResolvedValue(userRow);
+
+      await expect(
+        service.update(
+          'user-1',
+          { status: UserStatus.INACTIVE },
+          'user-1',
+          [PERMISSIONS.USERS_WRITE],
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('resets emailVerifiedAt and sends verification when email changes', async () => {
+      prisma.user.findUnique
+        .mockResolvedValueOnce({ ...userRow, emailVerifiedAt: new Date() })
+        .mockResolvedValueOnce(null);
+      prisma.user.update.mockResolvedValue(userRow);
+      auth.requestEmailVerification.mockResolvedValue({ success: true });
+
+      await service.update(
+        'user-1',
+        { email: 'new@b.com' },
+        'user-1',
+        [],
+      );
+
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            email: 'new@b.com',
+            emailVerifiedAt: null,
+          }),
+        }),
+      );
+      expect(auth.requestEmailVerification).toHaveBeenCalledWith('user-1');
+    });
+
+    it('revokes refresh tokens when admin changes another user password', async () => {
       prisma.user.findUnique.mockResolvedValue(userRow);
       crypto.hash.mockResolvedValue('new-hash');
       prisma.user.update.mockResolvedValue(userRow);
       prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
 
-      await service.update('user-1', { password: 'NewSecure1' }, 'user-1', []);
+      await service.update(
+        'user-2',
+        { password: 'NewSecure1' },
+        'admin-1',
+        [PERMISSIONS.USERS_WRITE],
+      );
 
       expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
-        where: { userId: 'user-1', revokedAt: null },
+        where: { userId: 'user-2', revokedAt: null },
         data: { revokedAt: expect.any(Date) },
       });
-      expect(rbac.invalidateUserPermissionCache).toHaveBeenCalledWith('user-1');
+      expect(rbac.invalidateUserPermissionCache).toHaveBeenCalledWith('user-2');
+    });
+
+    it('allows admin to update another user status', async () => {
+      prisma.user.findUnique.mockResolvedValue(userRow);
+      prisma.user.update.mockResolvedValue({
+        ...userRow,
+        status: UserStatus.INACTIVE,
+      });
+
+      const result = await service.update(
+        'user-2',
+        { status: UserStatus.INACTIVE },
+        'admin-1',
+        [PERMISSIONS.USERS_WRITE],
+      );
+
+      expect(result.status).toBe(UserStatus.INACTIVE);
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { status: UserStatus.INACTIVE },
+        }),
+      );
     });
   });
 

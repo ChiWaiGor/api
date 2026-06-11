@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { UserStatus } from '@prisma/client';
 import { AuthCryptoService } from '../auth/auth-crypto.service';
+import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PERMISSIONS } from '../rbac/permissions.constants';
 import { RbacService } from '../rbac/rbac.service';
@@ -21,6 +22,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: AuthCryptoService,
+    private readonly auth: AuthService,
     private readonly rbac: RbacService,
   ) {}
 
@@ -135,38 +137,72 @@ export class UsersService {
     requesterId: string,
     requesterPermissions: string[],
   ) {
+    const isSelfUpdate = id === requesterId;
     const canWriteAll = requesterPermissions.includes(PERMISSIONS.USERS_WRITE);
-    if (id !== requesterId && !canWriteAll) {
+    if (!isSelfUpdate && !canWriteAll) {
       throw new ForbiddenException('Insufficient permissions');
+    }
+
+    if (isSelfUpdate) {
+      if (body.password !== undefined) {
+        throw new BadRequestException(
+          'Use POST /auth/change-password to change your password',
+        );
+      }
+      if (body.status !== undefined) {
+        throw new BadRequestException('Cannot update your own status');
+      }
     }
 
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user || user.deletedAt) throw new NotFoundException('User not found');
 
-    if (body.email && body.email !== user.email) {
+    const emailChanging = body.email !== undefined && body.email !== user.email;
+
+    if (emailChanging) {
       const existing = await this.prisma.user.findUnique({
         where: { email: body.email },
       });
       if (existing) throw new ConflictException('Email already in use');
     }
 
+    const data: {
+      email?: string;
+      status?: UserStatus;
+      passwordHash?: string;
+      emailVerifiedAt?: Date | null;
+    } = {};
+
+    if (body.email !== undefined) {
+      data.email = body.email;
+    }
+    if (!isSelfUpdate && canWriteAll) {
+      if (body.status !== undefined) {
+        data.status = body.status;
+      }
+      if (body.password) {
+        data.passwordHash = await this.crypto.hash(body.password);
+      }
+    }
+    if (emailChanging) {
+      data.emailVerifiedAt = null;
+    }
+
     const updated = await this.prisma.user.update({
       where: { id },
-      data: {
-        email: body.email,
-        status: body.status,
-        passwordHash: body.password
-          ? await this.crypto.hash(body.password)
-          : undefined,
-      },
+      data,
       include: { roles: { include: { role: true } } },
     });
 
-    if (body.password) {
+    if (!isSelfUpdate && body.password) {
       await this.prisma.refreshToken.updateMany({
         where: { userId: id, revokedAt: null },
         data: { revokedAt: new Date() },
       });
+    }
+
+    if (emailChanging) {
+      await this.auth.requestEmailVerification(id);
     }
 
     await this.rbac.invalidateUserPermissionCache(id);

@@ -32,6 +32,11 @@ export const passwordResetConfirmSchema = z.object({
   newPassword: passwordSchema,
 });
 
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: passwordSchema,
+});
+
 export const emailVerificationConfirmSchema = z.object({
   token: z.string().min(1, 'Token is required'),
 });
@@ -64,6 +69,7 @@ export type PasswordResetRequestBody = z.infer<
 export type PasswordResetConfirmBody = z.infer<
   typeof passwordResetConfirmSchema
 >;
+export type ChangePasswordBody = z.infer<typeof changePasswordSchema>;
 export type EmailVerificationConfirmBody = z.infer<
   typeof emailVerificationConfirmSchema
 >;
@@ -78,6 +84,7 @@ export class PasswordResetRequestDto extends createZodDto(
 export class PasswordResetConfirmDto extends createZodDto(
   passwordResetConfirmSchema,
 ) {}
+export class ChangePasswordDto extends createZodDto(changePasswordSchema) {}
 export class EmailVerificationConfirmDto extends createZodDto(
   emailVerificationConfirmSchema,
 ) {}

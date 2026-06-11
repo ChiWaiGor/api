@@ -32,6 +32,7 @@ describe('AuthService', () => {
       findUnique: jest.fn(),
       update: jest.fn(),
       create: jest.fn(),
+      deleteMany: jest.fn(),
     },
     role: { findUnique: jest.fn() },
     $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
@@ -121,6 +122,7 @@ describe('AuthService', () => {
       crypto.hash.mockResolvedValue('hashed');
       prisma.role.findUnique.mockResolvedValue({ id: 'role-user' });
       prisma.user.create.mockResolvedValue(activeUser);
+      prisma.emailVerificationToken.deleteMany.mockResolvedValue({ count: 0 });
       prisma.emailVerificationToken.create.mockResolvedValue({ id: 'evt-1' });
       setupTokenMocks();
 
@@ -467,6 +469,51 @@ describe('AuthService', () => {
     });
   });
 
+  describe('changePassword', () => {
+    it('rejects when user not found', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.changePassword('missing', {
+          currentPassword: 'old',
+          newPassword: 'NewPass123',
+        }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('rejects invalid current password', async () => {
+      prisma.user.findUnique.mockResolvedValue(activeUser);
+      crypto.verify.mockResolvedValue(false);
+
+      await expect(
+        service.changePassword('user-1', {
+          currentPassword: 'wrong',
+          newPassword: 'NewPass123',
+        }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('updates password and revokes refresh tokens', async () => {
+      prisma.user.findUnique.mockResolvedValue(activeUser);
+      crypto.verify.mockResolvedValue(true);
+      crypto.hash.mockResolvedValue('new-hash');
+
+      const result = await service.changePassword('user-1', {
+        currentPassword: 'old',
+        newPassword: 'NewPass123',
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: 'user-1', revokedAt: null },
+          data: { revokedAt: expect.any(Date) },
+        }),
+      );
+    });
+  });
+
   describe('password reset', () => {
     it('returns success without sending mail for an unknown email', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
@@ -543,11 +590,15 @@ describe('AuthService', () => {
 
     it('creates a token and sends mail when unverified', async () => {
       prisma.user.findUnique.mockResolvedValue(activeUser);
+      prisma.emailVerificationToken.deleteMany.mockResolvedValue({ count: 0 });
       prisma.emailVerificationToken.create.mockResolvedValue({ id: 'evt-1' });
 
       const result = await service.requestEmailVerification('user-1');
 
       expect(result).toEqual({ success: true });
+      expect(prisma.emailVerificationToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1', usedAt: null },
+      });
       expect(prisma.emailVerificationToken.create).toHaveBeenCalled();
       expect(mail.send).toHaveBeenCalled();
     });
