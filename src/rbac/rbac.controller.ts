@@ -7,14 +7,11 @@ import {
   Patch,
   Post,
   Req,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { PermissionsGuard } from '../common/guards/permissions.guard';
 import type { JwtPayload } from '../auth/types/jwt-payload.type';
 import { PERMISSIONS } from './permissions.constants';
 import type { RbacAuditContext } from './rbac-audit.types';
@@ -29,7 +26,6 @@ import { RbacService } from './rbac.service';
 
 @ApiTags('rbac')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller()
 export class RbacController {
   constructor(private readonly rbacService: RbacService) {}

@@ -8,7 +8,8 @@ import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { JwtPayload } from '../../auth/types/jwt-payload.type';
 import { PrismaService } from '../../prisma/prisma.service';
-import { REQUIRE_VERIFIED_EMAIL } from '../decorators/require-verified-email.decorator';
+import { ALLOW_UNVERIFIED_EMAIL_KEY } from '../decorators/allow-unverified-email.decorator';
+import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 @Injectable()
 export class EmailVerifiedGuard implements CanActivate {
@@ -18,11 +19,19 @@ export class EmailVerifiedGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const required = this.reflector.getAllAndOverride<boolean>(
-      REQUIRE_VERIFIED_EMAIL,
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic) {
+      return true;
+    }
+
+    const allowUnverified = this.reflector.getAllAndOverride<boolean>(
+      ALLOW_UNVERIFIED_EMAIL_KEY,
       [context.getHandler(), context.getClass()],
     );
-    if (!required) {
+    if (allowUnverified) {
       return true;
     }
 
@@ -31,7 +40,7 @@ export class EmailVerifiedGuard implements CanActivate {
       .getRequest<Request & { user?: JwtPayload }>();
     const user = request.user;
     if (!user) {
-      return false;
+      return true;
     }
 
     const record = await this.prisma.user.findUnique({

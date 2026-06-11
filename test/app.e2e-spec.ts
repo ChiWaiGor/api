@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('API (e2e)', () => {
   let app: INestApplication<App>;
@@ -27,6 +28,12 @@ describe('API (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
+
+    const prisma = app.get(PrismaService);
+    await prisma.user.updateMany({
+      where: { email: adminCredentials.email, emailVerifiedAt: null },
+      data: { emailVerifiedAt: new Date() },
+    });
   });
 
   afterAll(async () => {
@@ -140,6 +147,39 @@ describe('API (e2e)', () => {
 
     it('rejects unauthenticated access to /auth/me', async () => {
       await request(app.getHttpServer()).get('/auth/me').expect(401);
+    });
+
+    it('allows unverified users on auth allowlist routes but blocks other APIs', async () => {
+      const email = `unverified-${Date.now()}@example.com`;
+      const password = 'SecurePass1';
+
+      const registerRes = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ email, password })
+        .expect(201);
+
+      const { accessToken } = registerRes.body;
+
+      await request(app.getHttpServer())
+        .get('/auth/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200)
+        .expect((res) => {
+          expect(res.body.emailVerified).toBe(false);
+        });
+
+      await request(app.getHttpServer())
+        .post('/auth/email-verification/request')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .get('/users?page=1&limit=5')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(403)
+        .expect((res) => {
+          expect(res.body.message).toBe('Email verification required');
+        });
     });
   });
 

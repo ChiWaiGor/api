@@ -5,13 +5,12 @@ import {
   HttpCode,
   HttpStatus,
   Post,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
+import { AllowUnverifiedEmail } from '../common/decorators/allow-unverified-email.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
 import {
   AuthMeResponseDto,
@@ -55,7 +54,7 @@ export class AuthController {
     return this.authService.refresh(body);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @AllowUnverifiedEmail()
   @ApiBearerAuth()
   @Post('logout')
   logout(
@@ -87,7 +86,7 @@ export class AuthController {
     return this.authService.confirmPasswordReset(body);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @AllowUnverifiedEmail()
   @ApiBearerAuth()
   @SkipThrottle({ default: true })
   @Throttle({ auth: {} })
@@ -110,7 +109,7 @@ export class AuthController {
     return this.authService.confirmEmailVerification(body);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @AllowUnverifiedEmail()
   @ApiBearerAuth()
   @Get('me')
   me(@CurrentUser() user: { sub: string }): Promise<AuthMeResponseDto> {
