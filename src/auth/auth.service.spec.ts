@@ -116,11 +116,12 @@ describe('AuthService', () => {
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
-    it('creates user and returns token pair', async () => {
+    it('creates user, sends verification email, and returns token pair', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       crypto.hash.mockResolvedValue('hashed');
       prisma.role.findUnique.mockResolvedValue({ id: 'role-user' });
       prisma.user.create.mockResolvedValue(activeUser);
+      prisma.emailVerificationToken.create.mockResolvedValue({ id: 'evt-1' });
       setupTokenMocks();
 
       const result = await service.register({
@@ -133,6 +134,13 @@ describe('AuthService', () => {
         refreshToken: 'refresh-token',
       });
       expect(prisma.user.create).toHaveBeenCalled();
+      expect(prisma.emailVerificationToken.create).toHaveBeenCalled();
+      expect(mail.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'a@b.com',
+          subject: 'Verify your email address',
+        }),
+      );
       expect(prisma.refreshToken.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'rt-1' },

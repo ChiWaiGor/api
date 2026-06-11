@@ -62,6 +62,8 @@ export class AuthService {
       include: { roles: { include: { role: true } } },
     });
 
+    await this.sendVerificationEmail(user);
+
     return this.issueTokenPair(user.id, user.email);
   }
 
@@ -308,25 +310,7 @@ export class AuthService {
       return { success: true };
     }
 
-    const { token, tokenHash } = this.generateSecret();
-    const ttlMinutes = this.config.get('EMAIL_VERIFICATION_TTL_MINUTES', {
-      infer: true,
-    });
-
-    await this.prisma.emailVerificationToken.create({
-      data: {
-        userId: user.id,
-        tokenHash,
-        expiresAt: new Date(Date.now() + ttlMinutes * 60_000),
-      },
-    });
-
-    const link = this.buildLink('/verify-email', token);
-    await this.mail.send({
-      to: user.email,
-      subject: 'Verify your email address',
-      text: `Confirm your email by visiting the following link (valid for ${ttlMinutes} minutes):\n${link}`,
-    });
+    await this.sendVerificationEmail(user);
 
     return { success: true };
   }
@@ -477,6 +461,31 @@ export class AuthService {
     if (user) {
       await this.clearFailedLogins(user.email);
     }
+  }
+
+  private async sendVerificationEmail(user: {
+    id: string;
+    email: string;
+  }): Promise<void> {
+    const { token, tokenHash } = this.generateSecret();
+    const ttlMinutes = this.config.get('EMAIL_VERIFICATION_TTL_MINUTES', {
+      infer: true,
+    });
+
+    await this.prisma.emailVerificationToken.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + ttlMinutes * 60_000),
+      },
+    });
+
+    const link = this.buildLink('/verify-email', token);
+    await this.mail.send({
+      to: user.email,
+      subject: 'Verify your email address',
+      text: `Confirm your email by visiting the following link (valid for ${ttlMinutes} minutes):\n${link}`,
+    });
   }
 
   private generateSecret(): { token: string; tokenHash: string } {
