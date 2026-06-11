@@ -26,6 +26,10 @@ import type {
   RegisterBody,
 } from './auth.schema';
 import { JwtPayload, JwtRefreshPayload } from './types/jwt-payload.type';
+import {
+  toUserSessionState,
+  type UserSessionState,
+} from './types/user-session-state.type';
 
 @Injectable()
 export class AuthService {
@@ -327,6 +331,7 @@ export class AuthService {
     ]);
 
     await this.clearFailedLoginsForUser(record.userId);
+    await this.invalidateUserSessionStateCache(record.userId);
 
     return { success: true };
   }
@@ -367,7 +372,59 @@ export class AuthService {
       }),
     ]);
 
+    await this.invalidateUserSessionStateCache(record.userId);
+
     return { success: true };
+  }
+
+  async getUserSessionState(userId: string): Promise<UserSessionState> {
+    const cacheKey = redisKeys.userSessionState(userId);
+    let cached: UserSessionState | null = null;
+
+    try {
+      cached = await this.redis.getJson<UserSessionState>(cacheKey);
+    } catch {
+      // Redis unavailable — fall back to DB.
+    }
+
+    if (cached) {
+      return cached;
+    }
+
+    const state = await this.loadUserSessionStateFromDb(userId);
+    if (!state) {
+      throw new UnauthorizedException();
+    }
+
+    try {
+      await this.redis.setJson(cacheKey, state, this.sessionStateCacheTtl);
+    } catch {
+      // Best-effort cache write; state already loaded from DB.
+    }
+
+    return state;
+  }
+
+  async invalidateUserSessionStateCache(userId: string): Promise<void> {
+    try {
+      await this.redis.del(redisKeys.userSessionState(userId));
+    } catch {
+      // Best-effort cache invalidation.
+    }
+  }
+
+  assertActiveSession(state: UserSessionState): void {
+    if (state.deletedAt) {
+      throw new UnauthorizedException('Account is no longer available');
+    }
+    if (state.status === UserStatus.LOCKED) {
+      throw new UnauthorizedException(
+        'Account is locked due to too many failed login attempts. Reset your password to regain access.',
+      );
+    }
+    if (state.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('Account is inactive');
+    }
   }
 
   async isAccessTokenBlacklisted(jti: string): Promise<boolean> {
@@ -377,6 +434,23 @@ export class AuthService {
       // Fail closed: deny access when Redis cannot confirm token status.
       return true;
     }
+  }
+
+  private get sessionStateCacheTtl(): number {
+    return this.config.get('SESSION_STATE_CACHE_TTL_SECONDS', { infer: true });
+  }
+
+  private async loadUserSessionStateFromDb(
+    userId: string,
+  ): Promise<UserSessionState | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { status: true, emailVerifiedAt: true, deletedAt: true },
+    });
+    if (!user) {
+      return null;
+    }
+    return toUserSessionState(user);
   }
 
   private async issueTokenPair(
@@ -470,6 +544,7 @@ export class AuthService {
         where: { id: userId },
         data: { status: UserStatus.LOCKED },
       });
+      await this.invalidateUserSessionStateCache(userId);
       this.logger.warn(
         `User ${userId} locked after ${count} failed login attempts`,
       );

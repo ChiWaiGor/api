@@ -23,6 +23,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (await this.authService.isAccessTokenBlacklisted(payload.jti)) {
       throw new UnauthorizedException('Token has been revoked');
     }
-    return payload;
+
+    const sessionState = await this.authService.getUserSessionState(
+      payload.sub,
+    );
+    this.authService.assertActiveSession(sessionState);
+
+    return { ...payload, sessionState };
   }
 }

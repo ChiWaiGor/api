@@ -6,8 +6,9 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
+import { AuthService } from '../../auth/auth.service';
 import { JwtPayload } from '../../auth/types/jwt-payload.type';
-import { PrismaService } from '../../prisma/prisma.service';
+import { isEmailVerified } from '../../auth/types/user-session-state.type';
 import { ALLOW_UNVERIFIED_EMAIL_KEY } from '../decorators/allow-unverified-email.decorator';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
@@ -15,7 +16,7 @@ import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 export class EmailVerifiedGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    private readonly prisma: PrismaService,
+    private readonly authService: AuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -43,12 +44,11 @@ export class EmailVerifiedGuard implements CanActivate {
       return true;
     }
 
-    const record = await this.prisma.user.findUnique({
-      where: { id: user.sub },
-      select: { emailVerifiedAt: true, deletedAt: true },
-    });
+    const sessionState =
+      user.sessionState ??
+      (await this.authService.getUserSessionState(user.sub));
 
-    if (!record || record.deletedAt || !record.emailVerifiedAt) {
+    if (!isEmailVerified(sessionState)) {
       throw new ForbiddenException('Email verification required');
     }
 

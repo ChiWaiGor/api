@@ -30,7 +30,10 @@ describe('UsersService', () => {
     $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
   };
   const crypto = { hash: jest.fn() };
-  const auth = { requestEmailVerification: jest.fn() };
+  const auth = {
+    requestEmailVerification: jest.fn(),
+    invalidateUserSessionStateCache: jest.fn(),
+  };
   const rbac = { invalidateUserPermissionCache: jest.fn() };
 
   const userRow = {
@@ -257,6 +260,7 @@ describe('UsersService', () => {
         ...userRow,
         status: UserStatus.INACTIVE,
       });
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.update(
         'user-2',
@@ -271,6 +275,25 @@ describe('UsersService', () => {
           data: { status: UserStatus.INACTIVE },
         }),
       );
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'user-2', revokedAt: null },
+        data: { revokedAt: expect.any(Date) },
+      });
+      expect(auth.invalidateUserSessionStateCache).toHaveBeenCalledWith('user-2');
+    });
+
+    it('does not revoke refresh tokens when status is unchanged', async () => {
+      prisma.user.findUnique.mockResolvedValue(userRow);
+      prisma.user.update.mockResolvedValue(userRow);
+
+      await service.update(
+        'user-2',
+        { status: UserStatus.ACTIVE },
+        'admin-1',
+        [PERMISSIONS.USERS_WRITE],
+      );
+
+      expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
     });
   });
 

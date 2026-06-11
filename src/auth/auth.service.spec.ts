@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { UserStatus } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
 import { redisKeys } from '../common/constants/redis-keys';
+import { toUserSessionState } from './types/user-session-state.type';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -44,6 +45,8 @@ describe('AuthService', () => {
     exists: jest.fn(),
     incrWithTtl: jest.fn(),
     del: jest.fn(),
+    getJson: jest.fn(),
+    setJson: jest.fn(),
   };
   const rbac = {
     getUserRoles: jest.fn(),
@@ -94,6 +97,7 @@ describe('AuthService', () => {
                 APP_BASE_URL: 'http://localhost:3000',
                 MAIL_FROM: 'no-reply@example.com',
                 MAIL_TRANSPORT: 'log',
+                SESSION_STATE_CACHE_TTL_SECONDS: 300,
               };
               return map[key];
             },
@@ -329,6 +333,80 @@ describe('AuthService', () => {
 
       const result = await service.getMe('user-1');
       expect(result.emailVerified).toBe(true);
+    });
+  });
+
+  describe('getUserSessionState', () => {
+    it('returns cached session state when present', async () => {
+      const cached = toUserSessionState(activeUser);
+      redis.getJson.mockResolvedValue(cached);
+
+      await expect(service.getUserSessionState('user-1')).resolves.toEqual(
+        cached,
+      );
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('loads from DB and caches on miss', async () => {
+      redis.getJson.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({
+        status: activeUser.status,
+        emailVerifiedAt: activeUser.emailVerifiedAt,
+        deletedAt: activeUser.deletedAt,
+      });
+
+      const result = await service.getUserSessionState('user-1');
+
+      expect(result).toEqual(toUserSessionState(activeUser));
+      expect(redis.setJson).toHaveBeenCalledWith(
+        redisKeys.userSessionState('user-1'),
+        toUserSessionState(activeUser),
+        300,
+      );
+    });
+
+    it('throws when user is not found', async () => {
+      redis.getJson.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.getUserSessionState('missing')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+    });
+  });
+
+  describe('assertActiveSession', () => {
+    it('rejects deleted users', () => {
+      expect(() =>
+        service.assertActiveSession(
+          toUserSessionState({ ...activeUser, deletedAt: new Date() }),
+        ),
+      ).toThrow(UnauthorizedException);
+    });
+
+    it('rejects locked users', () => {
+      expect(() =>
+        service.assertActiveSession(
+          toUserSessionState({ ...activeUser, status: UserStatus.LOCKED }),
+        ),
+      ).toThrow(UnauthorizedException);
+    });
+
+    it('rejects inactive users', () => {
+      expect(() =>
+        service.assertActiveSession(
+          toUserSessionState({ ...activeUser, status: UserStatus.INACTIVE }),
+        ),
+      ).toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('invalidateUserSessionStateCache', () => {
+    it('deletes the redis cache key', async () => {
+      await service.invalidateUserSessionStateCache('user-1');
+      expect(redis.del).toHaveBeenCalledWith(
+        redisKeys.userSessionState('user-1'),
+      );
     });
   });
 

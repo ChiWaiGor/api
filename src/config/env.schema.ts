@@ -33,6 +33,11 @@ export const envSchema = z
       .int()
       .positive()
       .default(300),
+    SESSION_STATE_CACHE_TTL_SECONDS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(300),
     // Brute-force / account-lockout defense. Failed logins are counted in Redis
     // over the rolling window; on reaching the threshold the user is LOCKED.
     LOGIN_MAX_FAILED_ATTEMPTS: z.coerce.number().int().positive().default(5),

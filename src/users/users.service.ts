@@ -158,6 +158,11 @@ export class UsersService {
     if (!user || user.deletedAt) throw new NotFoundException('User not found');
 
     const emailChanging = body.email !== undefined && body.email !== user.email;
+    const statusChanging =
+      !isSelfUpdate &&
+      canWriteAll &&
+      body.status !== undefined &&
+      body.status !== user.status;
 
     if (emailChanging) {
       const existing = await this.prisma.user.findUnique({
@@ -194,7 +199,10 @@ export class UsersService {
       include: { roles: { include: { role: true } } },
     });
 
-    if (!isSelfUpdate && body.password) {
+    if (
+      (!isSelfUpdate && body.password) ||
+      statusChanging
+    ) {
       await this.prisma.refreshToken.updateMany({
         where: { userId: id, revokedAt: null },
         data: { revokedAt: new Date() },
@@ -205,6 +213,7 @@ export class UsersService {
       await this.auth.requestEmailVerification(id);
     }
 
+    await this.auth.invalidateUserSessionStateCache(id);
     await this.rbac.invalidateUserPermissionCache(id);
     return this.toResponse(updated);
   }
@@ -226,6 +235,7 @@ export class UsersService {
       }),
     ]);
 
+    await this.auth.invalidateUserSessionStateCache(id);
     await this.rbac.invalidateUserPermissionCache(id);
     return { success: true };
   }

@@ -1,7 +1,8 @@
 import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { UserStatus } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
-import { PrismaService } from '../../prisma/prisma.service';
+import { AuthService } from '../../auth/auth.service';
 import { ALLOW_UNVERIFIED_EMAIL_KEY } from '../decorators/allow-unverified-email.decorator';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { EmailVerifiedGuard } from './email-verified.guard';
@@ -10,14 +11,26 @@ describe('EmailVerifiedGuard', () => {
   let guard: EmailVerifiedGuard;
 
   const reflector = { getAllAndOverride: jest.fn() };
-  const prisma = { user: { findUnique: jest.fn() } };
+  const authService = { getUserSessionState: jest.fn() };
+
+  const verifiedSession = {
+    status: UserStatus.ACTIVE,
+    emailVerifiedAt: '2024-01-01T00:00:00.000Z',
+    deletedAt: null,
+  };
+
+  const unverifiedSession = {
+    status: UserStatus.ACTIVE,
+    emailVerifiedAt: null,
+    deletedAt: null,
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EmailVerifiedGuard,
         { provide: Reflector, useValue: reflector },
-        { provide: PrismaService, useValue: prisma },
+        { provide: AuthService, useValue: authService },
       ],
     }).compile();
 
@@ -25,7 +38,7 @@ describe('EmailVerifiedGuard', () => {
     jest.clearAllMocks();
   });
 
-  const createContext = (user?: { sub: string }) =>
+  const createContext = (user?: { sub: string; sessionState?: unknown }) =>
     ({
       switchToHttp: () => ({ getRequest: () => ({ user }) }),
       getHandler: () => ({}),
@@ -49,7 +62,7 @@ describe('EmailVerifiedGuard', () => {
     mockMetadata({ isPublic: true });
 
     await expect(guard.canActivate(createContext())).resolves.toBe(true);
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(authService.getUserSessionState).not.toHaveBeenCalled();
   });
 
   it('allows routes opted out via AllowUnverifiedEmail', async () => {
@@ -58,22 +71,30 @@ describe('EmailVerifiedGuard', () => {
     await expect(guard.canActivate(createContext({ sub: 'u1' }))).resolves.toBe(
       true,
     );
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(authService.getUserSessionState).not.toHaveBeenCalled();
   });
 
   it('skips verification when there is no authenticated user', async () => {
     mockMetadata({});
 
     await expect(guard.canActivate(createContext())).resolves.toBe(true);
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(authService.getUserSessionState).not.toHaveBeenCalled();
+  });
+
+  it('reuses session state attached by JwtStrategy', async () => {
+    mockMetadata({});
+
+    await expect(
+      guard.canActivate(
+        createContext({ sub: 'u1', sessionState: verifiedSession }),
+      ),
+    ).resolves.toBe(true);
+    expect(authService.getUserSessionState).not.toHaveBeenCalled();
   });
 
   it('allows a verified user on protected routes', async () => {
     mockMetadata({});
-    prisma.user.findUnique.mockResolvedValue({
-      emailVerifiedAt: new Date(),
-      deletedAt: null,
-    });
+    authService.getUserSessionState.mockResolvedValue(verifiedSession);
 
     await expect(guard.canActivate(createContext({ sub: 'u1' }))).resolves.toBe(
       true,
@@ -82,22 +103,7 @@ describe('EmailVerifiedGuard', () => {
 
   it('forbids an unverified user on protected routes', async () => {
     mockMetadata({});
-    prisma.user.findUnique.mockResolvedValue({
-      emailVerifiedAt: null,
-      deletedAt: null,
-    });
-
-    await expect(
-      guard.canActivate(createContext({ sub: 'u1' })),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
-  it('forbids a soft-deleted user on protected routes', async () => {
-    mockMetadata({});
-    prisma.user.findUnique.mockResolvedValue({
-      emailVerifiedAt: new Date(),
-      deletedAt: new Date(),
-    });
+    authService.getUserSessionState.mockResolvedValue(unverifiedSession);
 
     await expect(
       guard.canActivate(createContext({ sub: 'u1' })),
