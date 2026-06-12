@@ -72,15 +72,15 @@ credentials, and TLS settings (SendGrid, Amazon SES, Postmark, etc.). When
 running the app via `docker compose up app`, `SMTP_HOST` is overridden to
 `mailpit` automatically.
 
-| Variable | Default | Description |
-| -------- | ------- | ----------- |
-| `MAIL_TRANSPORT` | `log` | `log` or `smtp` |
-| `MAIL_FROM` | `no-reply@example.com` | From address |
-| `SMTP_HOST` | `localhost` | SMTP server host |
-| `SMTP_PORT` | `1025` | SMTP server port |
-| `SMTP_USER` | _(empty)_ | SMTP username (optional for Mailpit) |
-| `SMTP_PASSWORD` | _(empty)_ | SMTP password |
-| `SMTP_SECURE` | `false` | Use TLS on connect (typically `true` for port 465) |
+| Variable         | Default                | Description                                        |
+| ---------------- | ---------------------- | -------------------------------------------------- |
+| `MAIL_TRANSPORT` | `log`                  | `log` or `smtp`                                    |
+| `MAIL_FROM`      | `no-reply@example.com` | From address                                       |
+| `SMTP_HOST`      | `localhost`            | SMTP server host                                   |
+| `SMTP_PORT`      | `1025`                 | SMTP server port                                   |
+| `SMTP_USER`      | _(empty)_              | SMTP username (optional for Mailpit)               |
+| `SMTP_PASSWORD`  | _(empty)_              | SMTP password                                      |
+| `SMTP_SECURE`    | `false`                | Use TLS on connect (typically `true` for port 465) |
 
 ## Default admin (after seed)
 
@@ -156,10 +156,10 @@ builds the Docker image.
 
 ## API overview
 
-| Module | Routes                                                                                                                       |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| Auth   | `POST /auth/register`, `login`, `refresh`, `logout`; `GET /auth/me`                                                          |
-| Users  | `GET/POST /users`, `GET/PATCH/DELETE /users/:id`                                                                             |
+| Module | Routes                                                                                                                                                                                                     |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth   | `POST /auth/register`, `login`, `refresh`, `logout`; `GET /auth/me`                                                                                                                                        |
+| Users  | `GET/POST /users`, `GET/PATCH/DELETE /users/:id`                                                                                                                                                           |
 | RBAC   | `GET /roles`, `GET /permissions`, `POST /roles`, `PATCH /roles/:id`, `DELETE /roles/:id`, `POST /roles/assign`, `POST /roles/unassign`, `POST /roles/permissions/attach`, `POST /roles/permissions/detach` |
 
 Permissions are defined in code (`src/rbac/permissions.constants.ts`) and synced via seed. They include `users:read`, `users:write`, `users:delete`, `roles:read`, `roles:manage`, `permissions:read`, and `permissions:manage` (the last is catalog-only; there is no runtime permission API).
@@ -172,11 +172,11 @@ Mutations (create/update/delete roles, assign/unassign, attach/detach permission
 
 ## Rate limiting
 
-| Variable | Default | Scope |
-| -------- | ------- | ----- |
-| `THROTTLE_TTL` / `THROTTLE_LIMIT` | required | Global default for protected routes |
-| `THROTTLE_AUTH_TTL` / `THROTTLE_AUTH_LIMIT` | 60000 ms / 10 | `POST /auth/register`, `POST /auth/login` |
-| (derived) | 2× `THROTTLE_AUTH_LIMIT` | `POST /auth/refresh` |
+| Variable                                    | Default                  | Scope                                     |
+| ------------------------------------------- | ------------------------ | ----------------------------------------- |
+| `THROTTLE_TTL` / `THROTTLE_LIMIT`           | required                 | Global default for protected routes       |
+| `THROTTLE_AUTH_TTL` / `THROTTLE_AUTH_LIMIT` | 60000 ms / 10            | `POST /auth/register`, `POST /auth/login` |
+| (derived)                                   | 2× `THROTTLE_AUTH_LIMIT` | `POST /auth/refresh`                      |
 
 Throttling counters are stored in **Redis** so limits are enforced consistently
 across multiple instances (the default in-memory store counts per process). If
@@ -213,11 +213,34 @@ src/
 | `npm run lint`           | ESLint with autofix             |
 | `npm run lint:ci`        | ESLint without autofix (CI)     |
 | `npm run typecheck`      | `tsc --noEmit` type check       |
+| `npm run validate`       | Lint, typecheck, and unit tests |
 | `npm run test`           | Unit tests                      |
 | `npm run test:e2e`       | E2E tests (requires DB + Redis) |
 | `npm run prisma:migrate` | Apply migrations (dev)          |
 | `npm run prisma:deploy`  | Apply migrations (prod)         |
 | `npm run prisma:seed`    | Seed roles, permissions, admin  |
+
+## Git hooks
+
+Hooks install automatically when you run `npm install` (via the `prepare` script).
+
+| Hook           | Runs                                                                            |
+| -------------- | ------------------------------------------------------------------------------- |
+| **pre-commit** | ESLint `--fix` and Prettier on staged files under `{src,apps,libs,test,prisma}` |
+| **pre-push**   | `npm run lint:ci`, `npm run typecheck` and `npm run test`                       |
+
+Run the same checks manually without pushing:
+
+```bash
+npm run validate
+```
+
+To skip hooks in an emergency (use sparingly):
+
+```bash
+git commit --no-verify
+git push --no-verify
+```
 
 ## Tests
 

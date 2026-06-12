@@ -3,7 +3,10 @@ import {
   getArgon2OptionsFromEnv,
   hashPassword,
 } from '../src/common/crypto/argon2.util';
-import { ALL_PERMISSIONS, PERMISSIONS } from '../src/rbac/permissions.constants';
+import {
+  ALL_PERMISSIONS,
+  PERMISSIONS,
+} from '../src/rbac/permissions.constants';
 
 const prisma = new PrismaClient();
 
