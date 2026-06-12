@@ -369,9 +369,9 @@ describe('AuthService', () => {
       redis.getJson.mockResolvedValue(null);
       prisma.user.findUnique.mockResolvedValue(null);
 
-      await expect(service.getUserSessionState('missing')).rejects.toBeInstanceOf(
-        UnauthorizedException,
-      );
+      await expect(
+        service.getUserSessionState('missing'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
     });
   });
 

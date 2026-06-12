@@ -200,12 +200,9 @@ describe('UsersService', () => {
       prisma.user.findUnique.mockResolvedValue(userRow);
 
       await expect(
-        service.update(
-          'user-1',
-          { status: UserStatus.INACTIVE },
-          'user-1',
-          [PERMISSIONS.USERS_WRITE],
-        ),
+        service.update('user-1', { status: UserStatus.INACTIVE }, 'user-1', [
+          PERMISSIONS.USERS_WRITE,
+        ]),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
@@ -216,12 +213,7 @@ describe('UsersService', () => {
       prisma.user.update.mockResolvedValue(userRow);
       auth.requestEmailVerification.mockResolvedValue({ success: true });
 
-      await service.update(
-        'user-1',
-        { email: 'new@b.com' },
-        'user-1',
-        [],
-      );
+      await service.update('user-1', { email: 'new@b.com' }, 'user-1', []);
 
       expect(prisma.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -240,12 +232,9 @@ describe('UsersService', () => {
       prisma.user.update.mockResolvedValue(userRow);
       prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
 
-      await service.update(
-        'user-2',
-        { password: 'NewSecure1' },
-        'admin-1',
-        [PERMISSIONS.USERS_WRITE],
-      );
+      await service.update('user-2', { password: 'NewSecure1' }, 'admin-1', [
+        PERMISSIONS.USERS_WRITE,
+      ]);
 
       expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
         where: { userId: 'user-2', revokedAt: null },
@@ -279,19 +268,18 @@ describe('UsersService', () => {
         where: { userId: 'user-2', revokedAt: null },
         data: { revokedAt: expect.any(Date) },
       });
-      expect(auth.invalidateUserSessionStateCache).toHaveBeenCalledWith('user-2');
+      expect(auth.invalidateUserSessionStateCache).toHaveBeenCalledWith(
+        'user-2',
+      );
     });
 
     it('does not revoke refresh tokens when status is unchanged', async () => {
       prisma.user.findUnique.mockResolvedValue(userRow);
       prisma.user.update.mockResolvedValue(userRow);
 
-      await service.update(
-        'user-2',
-        { status: UserStatus.ACTIVE },
-        'admin-1',
-        [PERMISSIONS.USERS_WRITE],
-      );
+      await service.update('user-2', { status: UserStatus.ACTIVE }, 'admin-1', [
+        PERMISSIONS.USERS_WRITE,
+      ]);
 
       expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
     });

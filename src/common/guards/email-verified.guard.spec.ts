@@ -49,13 +49,11 @@ describe('EmailVerifiedGuard', () => {
     isPublic?: boolean;
     allowUnverified?: boolean;
   }) => {
-    reflector.getAllAndOverride.mockImplementation(
-      (key: string, _targets: unknown[]) => {
-        if (key === IS_PUBLIC_KEY) return options.isPublic;
-        if (key === ALLOW_UNVERIFIED_EMAIL_KEY) return options.allowUnverified;
-        return undefined;
-      },
-    );
+    reflector.getAllAndOverride.mockImplementation((key: string) => {
+      if (key === IS_PUBLIC_KEY) return options.isPublic;
+      if (key === ALLOW_UNVERIFIED_EMAIL_KEY) return options.allowUnverified;
+      return undefined;
+    });
   };
 
   it('allows public routes without checking verification', async () => {

@@ -199,10 +199,7 @@ export class UsersService {
       include: { roles: { include: { role: true } } },
     });
 
-    if (
-      (!isSelfUpdate && body.password) ||
-      statusChanging
-    ) {
+    if ((!isSelfUpdate && body.password) || statusChanging) {
       await this.prisma.refreshToken.updateMany({
         where: { userId: id, revokedAt: null },
         data: { revokedAt: new Date() },
