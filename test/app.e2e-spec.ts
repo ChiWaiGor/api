@@ -3,7 +3,25 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
+import { MailService } from '../src/mail/mail.service';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { RedisService } from '../src/redis/redis.service';
+
+const extractVerificationTokenFromMail = (text: string): string => {
+  const match = text.match(/token=([a-f0-9]{64})/);
+  if (!match) {
+    throw new Error('Verification token not found in mail body');
+  }
+  return match[1];
+};
+
+type VerifiedUser = {
+  email: string;
+  password: string;
+  accessToken: string;
+  refreshToken: string;
+  userId: string;
+};
 
 describe('API (e2e)', () => {
   let app: INestApplication<App>;
@@ -21,6 +39,53 @@ describe('API (e2e)', () => {
     return res.body.accessToken as string;
   };
 
+  const registerAndVerifyUser = async (
+    prefix: string,
+    password = 'SecurePass1',
+  ): Promise<VerifiedUser> => {
+    const email = `${prefix}-${Date.now()}@example.com`;
+    const mailService = app.get(MailService);
+    const sendSpy = jest.spyOn(mailService, 'send');
+
+    const registerRes = await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({ email, password })
+      .expect(201);
+
+    const verificationCall = sendSpy.mock.calls.find(
+      ([msg]) =>
+        msg.subject === 'Verify your email address' && msg.to === email,
+    );
+    expect(verificationCall).toBeDefined();
+    const token = extractVerificationTokenFromMail(verificationCall![0].text);
+
+    await request(app.getHttpServer())
+      .post('/auth/email-verification/confirm')
+      .send({ token })
+      .expect(200);
+
+    sendSpy.mockRestore();
+
+    const accessToken = registerRes.body.accessToken as string;
+    const refreshToken = registerRes.body.refreshToken as string;
+
+    const meRes = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.emailVerified).toBe(true);
+      });
+
+    return {
+      email,
+      password,
+      accessToken,
+      refreshToken,
+      userId: meRes.body.id as string,
+    };
+  };
+
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -28,6 +93,10 @@ describe('API (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
+
+    const redis = app.get(RedisService);
+    await redis.connect();
+    await redis.getClient().flushdb();
 
     const prisma = app.get(PrismaService);
     await prisma.user.updateMany({
@@ -149,6 +218,105 @@ describe('API (e2e)', () => {
       await request(app.getHttpServer()).get('/auth/me').expect(401);
     });
 
+    it('grants domain API access after register and email verification confirm', async () => {
+      const mailService = app.get(MailService);
+      const sendSpy = jest.spyOn(mailService, 'send');
+      const email = `verified-${Date.now()}@example.com`;
+      const password = 'SecurePass1';
+
+      const registerRes = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ email, password })
+        .expect(201);
+
+      const { accessToken } = registerRes.body;
+
+      await request(app.getHttpServer())
+        .get('/users?page=1&limit=5')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(403)
+        .expect((res) => {
+          expect(res.body.message).toBe('Email verification required');
+        });
+
+      const verificationCall = sendSpy.mock.calls.find(
+        ([msg]) =>
+          msg.subject === 'Verify your email address' && msg.to === email,
+      );
+      expect(verificationCall).toBeDefined();
+      const token = extractVerificationTokenFromMail(verificationCall![0].text);
+
+      await request(app.getHttpServer())
+        .post('/auth/email-verification/confirm')
+        .send({ token })
+        .expect(200);
+
+      sendSpy.mockRestore();
+
+      await request(app.getHttpServer())
+        .get('/users?page=1&limit=5')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200)
+        .expect((res) => {
+          expect(Array.isArray(res.body.data)).toBe(true);
+        });
+    });
+
+    it('rejects change-password for unverified users', async () => {
+      const email = `unverified-pw-${Date.now()}@example.com`;
+      const password = 'SecurePass1';
+
+      const registerRes = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ email, password })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .set('Authorization', `Bearer ${registerRes.body.accessToken}`)
+        .send({ currentPassword: password, newPassword: 'NewSecure2' })
+        .expect(403)
+        .expect((res) => {
+          expect(res.body.message).toBe('Email verification required');
+        });
+    });
+
+    it('changes password via dedicated endpoint and revokes refresh tokens', async () => {
+      const { email, password, accessToken, refreshToken } =
+        await registerAndVerifyUser('changepw');
+      const newPassword = 'NewSecure2';
+
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ currentPassword: 'WrongPass1', newPassword })
+        .expect(401)
+        .expect((res) => {
+          expect(res.body.message).toBe('Invalid current password');
+        });
+
+      await request(app.getHttpServer())
+        .post('/auth/change-password')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ currentPassword: password, newPassword })
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email, password })
+        .expect(401);
+
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({ refreshToken })
+        .expect(401);
+
+      await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email, password: newPassword })
+        .expect(201);
+    });
+
     it('allows unverified users on auth allowlist routes but blocks other APIs', async () => {
       const email = `unverified-${Date.now()}@example.com`;
       const password = 'SecurePass1';
@@ -264,6 +432,67 @@ describe('API (e2e)', () => {
           password: 'SecurePass1',
         })
         .expect(403);
+    });
+
+    it('rejects self-update of password and status', async () => {
+      const { accessToken, userId } = await registerAndVerifyUser('selfupdate');
+
+      await request(app.getHttpServer())
+        .patch(`/users/${userId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ password: 'NewSecure2' })
+        .expect(400)
+        .expect((res) => {
+          expect(res.body.message).toBe(
+            'Use POST /auth/change-password to change your password',
+          );
+        });
+
+      await request(app.getHttpServer())
+        .patch(`/users/${userId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ status: 'INACTIVE' })
+        .expect(400)
+        .expect((res) => {
+          expect(res.body.message).toBe('Cannot update your own status');
+        });
+    });
+
+    it('blocks deactivated users on protected routes', async () => {
+      const { accessToken, userId } =
+        await registerAndVerifyUser('deactivated');
+      const adminToken = await loginAdmin();
+      if (!adminToken) {
+        console.warn(
+          'Skipping deactivated user test: seed admin not available',
+        );
+        return;
+      }
+
+      await request(app.getHttpServer())
+        .patch(`/users/${userId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'INACTIVE' })
+        .expect(200)
+        .expect((res) => {
+          expect(res.body.status).toBe('INACTIVE');
+        });
+
+      await request(app.getHttpServer())
+        .get('/auth/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(401)
+        .expect((res) => {
+          expect(res.body.message).toBe('Account is inactive');
+        });
+
+      await request(app.getHttpServer())
+        .get('/users?page=1&limit=5')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(401)
+        .expect((res) => {
+          expect(res.body.message).toBe('Account is inactive');
+        });
     });
   });
 });
