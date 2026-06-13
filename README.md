@@ -206,19 +206,20 @@ src/
 
 ## Scripts
 
-| Script                   | Description                     |
-| ------------------------ | ------------------------------- |
-| `npm run start:dev`      | Dev server with watch           |
-| `npm run build`          | Production build                |
-| `npm run lint`           | ESLint with autofix             |
-| `npm run lint:ci`        | ESLint without autofix (CI)     |
-| `npm run typecheck`      | `tsc --noEmit` type check       |
-| `npm run validate`       | Lint, typecheck, and unit tests |
-| `npm run test`           | Unit tests                      |
-| `npm run test:e2e`       | E2E tests (requires DB + Redis) |
-| `npm run prisma:migrate` | Apply migrations (dev)          |
-| `npm run prisma:deploy`  | Apply migrations (prod)         |
-| `npm run prisma:seed`    | Seed roles, permissions, admin  |
+| Script                   | Description                      |
+| ------------------------ | -------------------------------- |
+| `npm run start:dev`      | Dev server with watch            |
+| `npm run build`          | Production build                 |
+| `npm run lint`           | ESLint with autofix              |
+| `npm run lint:ci`        | ESLint without autofix (CI)      |
+| `npm run typecheck`      | `tsc --noEmit` type check        |
+| `npm run validate`       | Lint, typecheck, and unit tests  |
+| `npm run test`           | Unit tests                       |
+| `npm run test:e2e`       | E2E tests (requires DB + Redis)  |
+| `npm run e2e:prepare`    | Migrate/seed E2E database (once) |
+| `npm run prisma:migrate` | Apply migrations (dev)           |
+| `npm run prisma:deploy`  | Apply migrations (prod)          |
+| `npm run prisma:seed`    | Seed roles, permissions, admin   |
 
 ## Git hooks
 
@@ -248,6 +249,10 @@ git push --no-verify
 docker compose up -d
 npm run prisma:migrate
 npm run prisma:seed
+npm run e2e:prepare   # once, for local e2e DB
 npm run test
 npm run test:e2e
 ```
+
+Locally, e2e uses `POSTGRES_E2E_DB` (default `app_e2e`, created on first postgres
+start) and `REDIS_E2E_DB` (default `15`). CI is unchanged.

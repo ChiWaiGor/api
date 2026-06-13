@@ -6,12 +6,18 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
       POSTGRES_DB: ${POSTGRES_DB:-app}
+      POSTGRES_E2E_DB: ${POSTGRES_E2E_DB:-app_e2e}
     ports:
       - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-e2e-db.sh:/docker-entrypoint-initdb.d/02-create-e2e-db.sh:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-app}']
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-app}',
+        ]
       interval: 5s
       timeout: 5s
       retries: 10

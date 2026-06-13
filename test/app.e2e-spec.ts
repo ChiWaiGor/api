@@ -106,6 +106,22 @@ describe('API (e2e)', () => {
   });
 
   afterAll(async () => {
+    if (!app) return;
+    try {
+      const prisma = app.get(PrismaService);
+      await prisma.rbacAuditLog.deleteMany();
+      await prisma.user.deleteMany({
+        where: { email: { not: adminCredentials.email } },
+      });
+    } catch {
+      // DB cleanup is best-effort if setup failed early.
+    }
+    try {
+      const redis = app.get(RedisService);
+      await redis.getClient()?.flushdb();
+    } catch {
+      // Redis may not have connected if setup failed early.
+    }
     await app.close();
   });
 
