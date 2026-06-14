@@ -22,6 +22,23 @@ services:
       timeout: 5s
       retries: 10
 
+  # Idempotent E2E DB creation on every compose up (covers stale volumes).
+  ensure-e2e-db:
+    image: postgres:16-alpine
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+      POSTGRES_E2E_DB: ${POSTGRES_E2E_DB:-app_e2e}
+    volumes:
+      - ./docker/postgres/ensure-e2e-db.sh:/ensure-e2e-db.sh:ro
+    entrypoint: ['/bin/sh', '/ensure-e2e-db.sh']
+
   mailpit:
     image: axllent/mailpit:latest
     restart: unless-stopped

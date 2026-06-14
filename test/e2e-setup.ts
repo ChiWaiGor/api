@@ -18,8 +18,8 @@ process.env.THROTTLE_AUTH_LIMIT = '100';
 
 process.env.MAIL_TRANSPORT = 'log';
 
-// Local-only isolation: CI keeps workflow env (DATABASE_URL, REDIS_DB, etc.).
-if (!process.env.CI && process.env.POSTGRES_E2E_DB) {
+// E2E isolation when POSTGRES_E2E_DB is set (local and CI).
+if (process.env.POSTGRES_E2E_DB) {
   process.env.REDIS_DB = process.env.REDIS_E2E_DB ?? '15';
 
   const user = process.env.POSTGRES_USER ?? 'app';

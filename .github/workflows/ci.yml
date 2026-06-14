@@ -43,9 +43,16 @@ jobs:
       HUSKY: 0
       NODE_ENV: test
       DATABASE_URL: postgresql://app:app@localhost:5432/app?schema=public
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: app
+      POSTGRES_E2E_DB: app_e2e
       REDIS_HOST: localhost
       REDIS_PORT: 6379
       REDIS_DB: 0
+      REDIS_E2E_DB: 15
       JWT_ACCESS_SECRET: ci-access-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaa
       JWT_ACCESS_TTL: 15m
       JWT_REFRESH_SECRET: ci-refresh-secret-bbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -89,8 +96,17 @@ jobs:
       - name: Seed database
         run: npm run prisma:seed
 
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Ensure E2E database
+        run: sh scripts/ensure-e2e-db.sh
+
       - name: Unit tests
         run: npm run test:cov
+
+      - name: Prepare E2E database
+        run: npm run e2e:prepare
 
       - name: E2E tests
         run: npm run test:e2e
