@@ -63,9 +63,8 @@ services:
       timeout: 5s
       retries: 10
 
-  # One-off migrations + seed. Run before first app start (and after schema
-  # changes): `docker compose run --rm migrate`. Uses the builder stage because
-  # the Prisma CLI is a dev dependency not present in the runtime image.
+  # One-off migrations. Run on every release: `docker compose run --rm migrate`.
+  # Seed catalog/admin separately (see seed-catalog / seed-admin services).
   migrate:
     profiles: ['tools']
     build:
@@ -75,7 +74,38 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-app}?schema=public
-    command: sh -c "npx prisma migrate deploy && npx prisma db seed"
+    command: npm run prisma:deploy
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Upserts permissions and system roles. Safe after releases that add permissions.
+  seed-catalog:
+    profiles: ['tools']
+    build:
+      context: .
+      target: builder
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-app}?schema=public
+    command: npm run prisma:seed:catalog
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Bootstrap admin on first deploy, or rotate password when SEED_ADMIN_ROTATE_PASSWORD=true.
+  seed-admin:
+    profiles: ['tools']
+    build:
+      context: .
+      target: builder
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-app}?schema=public
+      SEED_ADMIN_ROTATE_PASSWORD: ${SEED_ADMIN_ROTATE_PASSWORD:-false}
+    command: npm run prisma:seed:admin
     depends_on:
       postgres:
         condition: service_healthy

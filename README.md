@@ -28,20 +28,7 @@ One-shot bootstrap (postgres, redis, mailpit — no app container; migrations + 
 npm run dev:bootstrap
 ```
 
-Or manually:
-
-```bash
-docker compose up -d
-```
-
-### 3. Database (if not using bootstrap)
-
-```bash
-npm run prisma:migrate
-npm run prisma:seed
-```
-
-### 4. Run API
+### 3. Run API
 
 ```bash
 npm run start:dev
@@ -129,11 +116,19 @@ compiled in the build stage). `docker-compose.yml` includes `app` and a one-off
 `migrate` service alongside Postgres and Redis.
 
 ```bash
-# Build + run migrations/seed once, then start the API
+# Build, migrate, seed (first deploy), then start the API
 docker compose build
-docker compose run --rm migrate      # prisma migrate deploy && db seed
-docker compose up -d app             # serves on http://localhost:${APP_PORT:-3000}
+docker compose run --rm migrate           # prisma migrate deploy (every release)
+docker compose run --rm seed-catalog      # permissions + roles (first deploy; after catalog changes)
+docker compose run --rm seed-admin        # bootstrap admin (first deploy only)
+docker compose up -d app                  # serves on http://localhost:${APP_PORT:-3000}
 ```
+
+**Routine releases** (no schema or permission catalog changes): run `migrate` only, then roll the app.
+
+**Releases with new permissions** in code: `migrate` → `seed-catalog` → roll app.
+
+**Admin password rotation**: `SEED_ADMIN_ROTATE_PASSWORD=true docker compose run --rm seed-admin`
 
 The container exposes a Docker `HEALTHCHECK` against `/health`, binds to
 `0.0.0.0`, and enables graceful shutdown hooks so Prisma/Redis disconnect on
@@ -152,6 +147,10 @@ The container exposes a Docker `HEALTHCHECK` against `/health`, binds to
   `.env.example`.
 - **Migrations** run as a discrete release step (`migrate` service /
   `npm run prisma:deploy`), not at app boot.
+- **Seed split**: `prisma:seed:catalog` syncs permissions/roles (safe to re-run
+  when the catalog changes). `prisma:seed:admin` creates the bootstrap admin
+  once; set `SEED_ADMIN_ROTATE_PASSWORD=true` only for intentional password
+  rotation. `prisma:seed` runs both (local dev / CI only).
 - **Logs**: sensitive fields (`authorization` header, passwords, tokens) are
   redacted from structured logs.
 
@@ -214,21 +213,23 @@ src/
 
 ## Scripts
 
-| Script                   | Description                             |
-| ------------------------ | --------------------------------------- |
-| `npm run dev:bootstrap`  | Start infra, migrate/seed dev + e2e DBs |
-| `npm run start:dev`      | Dev server with watch                   |
-| `npm run build`          | Production build                        |
-| `npm run lint`           | ESLint with autofix                     |
-| `npm run lint:ci`        | ESLint without autofix (CI)             |
-| `npm run typecheck`      | `tsc --noEmit` type check               |
-| `npm run validate`       | Lint, typecheck, and unit tests         |
-| `npm run test`           | Unit tests                              |
-| `npm run test:e2e`       | E2E tests (requires DB + Redis)         |
-| `npm run e2e:prepare`    | Migrate/seed E2E database               |
-| `npm run prisma:migrate` | Apply migrations (dev)                  |
-| `npm run prisma:deploy`  | Apply migrations (prod)                 |
-| `npm run prisma:seed`    | Seed roles, permissions, admin          |
+| Script                        | Description                               |
+| ----------------------------- | ----------------------------------------- |
+| `npm run dev:bootstrap`       | Start infra, migrate/seed dev + e2e DBs   |
+| `npm run start:dev`           | Dev server with watch                     |
+| `npm run build`               | Production build                          |
+| `npm run lint`                | ESLint with autofix                       |
+| `npm run lint:ci`             | ESLint without autofix (CI)               |
+| `npm run typecheck`           | `tsc --noEmit` type check                 |
+| `npm run validate`            | Lint, typecheck, and unit tests           |
+| `npm run test`                | Unit tests                                |
+| `npm run test:e2e`            | E2E tests (requires DB + Redis)           |
+| `npm run e2e:prepare`         | Migrate/seed E2E database                 |
+| `npm run prisma:migrate`      | Apply migrations (dev)                    |
+| `npm run prisma:deploy`       | Apply migrations (prod)                   |
+| `npm run prisma:seed`         | Seed catalog + admin (dev / CI)           |
+| `npm run prisma:seed:catalog` | Sync permissions and system roles         |
+| `npm run prisma:seed:admin`   | Bootstrap admin (or rotate with env flag) |
 
 ## Git hooks
 
