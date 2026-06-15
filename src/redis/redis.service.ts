@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { Env } from '../config/env.schema';
 import { RedisCircuitBreaker } from './redis-circuit-breaker';
+import { buildRedisOptions } from './redis-options';
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
@@ -18,19 +19,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly config: ConfigService<Env, true>) {}
 
   onModuleInit() {
-    const host = this.config.get('REDIS_HOST', { infer: true });
-    const port = this.config.get('REDIS_PORT', { infer: true });
-    const password = this.config.get('REDIS_PASSWORD', { infer: true });
-    const db = this.config.get('REDIS_DB', { infer: true });
-
-    this.client = new Redis({
-      host,
-      port,
-      password: password || undefined,
-      db,
-      maxRetriesPerRequest: 3,
-      lazyConnect: true,
-    });
+    this.client = new Redis(
+      buildRedisOptions(this.config, {
+        maxRetriesPerRequest: 3,
+        lazyConnect: true,
+      }),
+    );
 
     this.client.on('error', (err) =>
       this.logger.error(`Redis error: ${err.message}`),

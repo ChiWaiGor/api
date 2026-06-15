@@ -11,6 +11,14 @@ export const envSchema = z
     REDIS_PORT: z.coerce.number().int().positive(),
     REDIS_PASSWORD: z.string().optional(),
     REDIS_DB: z.coerce.number().int().nonnegative().default(0),
+    // Enable TLS for managed Redis (ElastiCache in-transit encryption, Upstash,
+    // Redis Cloud, etc.). Uses host/port/password/db; set REDIS_TLS=true rather
+    // than rediss:// URLs.
+    REDIS_TLS: z
+      .string()
+      .optional()
+      .default('false')
+      .transform((v) => v === 'true' || v === '1'),
     JWT_ACCESS_SECRET: z.string().min(32),
     JWT_ACCESS_TTL: z.string().min(1),
     JWT_REFRESH_SECRET: z.string().min(32),

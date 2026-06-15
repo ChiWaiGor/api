@@ -64,8 +64,8 @@ then open [http://localhost:8025](http://localhost:8025) to read the message.
 
 The same SMTP adapter works in production with your provider's host, port,
 credentials, and TLS settings (SendGrid, Amazon SES, Postmark, etc.). When
-running the app via `docker compose up app`, `SMTP_HOST` is overridden to
-`mailpit` automatically.
+running the app via `docker compose up app`, `MAIL_TRANSPORT` is set to `smtp`
+and `SMTP_HOST` is overridden to `mailpit` automatically.
 
 | Variable         | Default                | Description                                        |
 | ---------------- | ---------------------- | -------------------------------------------------- |
@@ -76,6 +76,21 @@ running the app via `docker compose up app`, `SMTP_HOST` is overridden to
 | `SMTP_USER`      | _(empty)_              | SMTP username (optional for Mailpit)               |
 | `SMTP_PASSWORD`  | _(empty)_              | SMTP password                                      |
 | `SMTP_SECURE`    | `false`                | Use TLS on connect (typically `true` for port 465) |
+
+## Redis
+
+Local Docker Redis uses `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` /
+`REDIS_DB`. For managed providers with in-transit encryption (ElastiCache,
+Upstash, Redis Cloud, etc.), set `REDIS_TLS=true` alongside the provider's
+host, port, and password.
+
+| Variable         | Default      | Description                                 |
+| ---------------- | ------------ | ------------------------------------------- |
+| `REDIS_HOST`     | _(required)_ | Redis hostname                              |
+| `REDIS_PORT`     | _(required)_ | Redis port (often `6379` or `6380` for TLS) |
+| `REDIS_PASSWORD` | _(empty)_    | Redis AUTH password                         |
+| `REDIS_DB`       | `0`          | Redis logical database index                |
+| `REDIS_TLS`      | `false`      | Enable TLS (`true` for managed Redis)       |
 
 ## Default admin (after seed)
 
