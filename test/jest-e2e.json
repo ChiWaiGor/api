@@ -6,5 +6,13 @@
   "testRegex": ".e2e-spec.ts$",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^@app/shared$": "<rootDir>/../libs/shared/src",
+    "^@app/shared/(.*)$": "<rootDir>/../libs/shared/src/$1",
+    "^@app/mail$": "<rootDir>/../libs/mail/src",
+    "^@app/mail/(.*)$": "<rootDir>/../libs/mail/src/$1",
+    "^@app/queue$": "<rootDir>/../libs/queue/src",
+    "^@app/queue/(.*)$": "<rootDir>/../libs/queue/src/$1"
   }
 }

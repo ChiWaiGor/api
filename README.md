@@ -42,12 +42,20 @@ npm run start:dev
 
 ## Local mail testing (Mailpit)
 
-Outbound mail (password reset, email verification) uses a provider-agnostic
-`MailService`. By default messages are written to the app logger
-(`MAIL_TRANSPORT=log`). To capture real SMTP traffic locally:
+Outbound mail (password reset, email verification) is enqueued by the API and
+sent asynchronously by the **worker** via `MailService`. By default the worker
+writes messages to the logger (`MAIL_TRANSPORT=log`). To capture real SMTP
+traffic locally:
 
 ```bash
-docker compose up -d mailpit
+docker compose up -d mailpit redis
+```
+
+In one terminal start the API; in another start the worker:
+
+```bash
+npm run start:dev          # API
+npm run start:dev:worker   # mail worker
 ```
 
 Set in `.env`:
@@ -59,23 +67,26 @@ SMTP_PORT=1025
 SMTP_SECURE=false
 ```
 
-Restart the API, trigger a mail flow (e.g. `POST /auth/password-reset/request`),
-then open [http://localhost:8025](http://localhost:8025) to read the message.
+Trigger a mail flow (e.g. `POST /auth/password-reset/request`), then open
+[http://localhost:8025](http://localhost:8025) to read the message.
 
 The same SMTP adapter works in production with your provider's host, port,
-credentials, and TLS settings (SendGrid, Amazon SES, Postmark, etc.). When
-running the app via `docker compose up app`, `MAIL_TRANSPORT` is set to `smtp`
-and `SMTP_HOST` is overridden to `mailpit` automatically.
+credentials, and TLS settings (SendGrid, Amazon SES, Postmark, etc.). With
+`docker compose up`, the `worker` service sets `MAIL_TRANSPORT=smtp` and
+`SMTP_HOST=mailpit`; scale API and worker independently as needed.
 
-| Variable         | Default                | Description                                        |
-| ---------------- | ---------------------- | -------------------------------------------------- |
-| `MAIL_TRANSPORT` | `log`                  | `log` or `smtp`                                    |
-| `MAIL_FROM`      | `no-reply@example.com` | From address                                       |
-| `SMTP_HOST`      | `localhost`            | SMTP server host                                   |
-| `SMTP_PORT`      | `1025`                 | SMTP server port                                   |
-| `SMTP_USER`      | _(empty)_              | SMTP username (optional for Mailpit)               |
-| `SMTP_PASSWORD`  | _(empty)_              | SMTP password                                      |
-| `SMTP_SECURE`    | `false`                | Use TLS on connect (typically `true` for port 465) |
+| Variable                  | Default                | Description                                        |
+| ------------------------- | ---------------------- | -------------------------------------------------- |
+| `MAIL_TRANSPORT`          | `log`                  | `log` or `smtp` (worker only)                      |
+| `MAIL_FROM`               | `no-reply@example.com` | From address                                       |
+| `MAIL_WORKER_CONCURRENCY` | `5`                    | Parallel mail jobs per worker instance             |
+| `MAIL_JOB_ATTEMPTS`       | `3`                    | BullMQ retry attempts for failed sends             |
+| `QUEUE_PREFIX`            | _(empty)_              | Optional BullMQ Redis key prefix                   |
+| `SMTP_HOST`               | `localhost`            | SMTP server host                                   |
+| `SMTP_PORT`               | `1025`                 | SMTP server port                                   |
+| `SMTP_USER`               | _(empty)_              | SMTP username (optional for Mailpit)               |
+| `SMTP_PASSWORD`           | _(empty)_              | SMTP password                                      |
+| `SMTP_SECURE`             | `false`                | Use TLS on connect (typically `true` for port 465) |
 
 ## Redis
 
@@ -184,7 +195,7 @@ builds the Docker image.
 | Users  | `GET/POST /users`, `GET/PATCH/DELETE /users/:id`                                                                                                                                                           |
 | RBAC   | `GET /roles`, `GET /permissions`, `POST /roles`, `PATCH /roles/:id`, `DELETE /roles/:id`, `POST /roles/assign`, `POST /roles/unassign`, `POST /roles/permissions/attach`, `POST /roles/permissions/detach` |
 
-Permissions are defined in code (`src/rbac/permissions.constants.ts`) and synced via seed. They include `users:read`, `users:write`, `users:delete`, `roles:read`, `roles:manage`, `permissions:read`, and `permissions:manage` (the last is catalog-only; there is no runtime permission API).
+Permissions are defined in code (`apps/api/src/rbac/permissions.constants.ts`) and synced via seed. They include `users:read`, `users:write`, `users:delete`, `roles:read`, `roles:manage`, `permissions:read`, and `permissions:manage` (the last is catalog-only; there is no runtime permission API).
 
 See **[docs/RBAC.md](docs/RBAC.md)** for system roles, mutation rules, audit logging, and a production checklist.
 
@@ -215,24 +226,27 @@ Redis operations used for auth security run through a circuit breaker (opens aft
 ## Project structure
 
 ```
-src/
-├── config/           # Zod env schema
-├── common/           # guards, decorators, shared primitives
-├── auth/             # auth.schema.ts, JWT, Argon2
-├── users/            # user.schema.ts
-├── rbac/             # permissions, roles, audit
-├── redis/            # ioredis service
+apps/
+├── api/              # HTTP API (auth, users, rbac, health)
+└── worker/           # Background job processors (mail, future workers)
+libs/
+├── shared/           # config, prisma, redis
 ├── mail/             # MailService (log + SMTP transports)
-└── prisma/           # Prisma service
+└── queue/            # BullMQ module, job contracts, producers
 ```
+
+The API enqueues jobs (e.g. outbound email) via `libs/queue`; the worker consumes them from Redis/BullMQ and runs the actual side effects.
 
 ## Scripts
 
 | Script                        | Description                               |
 | ----------------------------- | ----------------------------------------- |
 | `npm run dev:bootstrap`       | Start infra, migrate/seed dev + e2e DBs   |
-| `npm run start:dev`           | Dev server with watch                     |
-| `npm run build`               | Production build                          |
+| `npm run start:dev`           | API dev server with watch                 |
+| `npm run start:dev:worker`    | Worker dev process with watch             |
+| `npm run build`               | Production build (api + worker)           |
+| `npm run start:prod:api`      | Run compiled API                          |
+| `npm run start:prod:worker`   | Run compiled worker                       |
 | `npm run lint`                | ESLint with autofix                       |
 | `npm run lint:ci`             | ESLint without autofix (CI)               |
 | `npm run typecheck`           | `tsc --noEmit` type check                 |

@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import {
   getArgon2OptionsFromEnv,
   hashPassword,
-} from '../src/common/crypto/argon2.util';
+} from '../apps/api/src/common/crypto/argon2.util';
 import { isTruthyEnv, runSeedScript } from './seed-runner';
 
 /**
