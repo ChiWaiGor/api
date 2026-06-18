@@ -1,4 +1,4 @@
-import { ArgumentsHost, HttpStatus } from '@nestjs/common';
+import { ArgumentsHost, BadRequestException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Env, captureSentryException } from '@app/shared';
 import { AllExceptionsFilter } from './all-exceptions.filter';
@@ -72,6 +72,24 @@ describe('AllExceptionsFilter', () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         message: 'Internal server error',
+      }),
+    );
+  });
+
+  it('delegates HttpException to HttpExceptionFilter', () => {
+    const filter = createFilter('development');
+    const exception = new BadRequestException('Bad input');
+    const { host, status, json } = createHost('/bad');
+
+    filter.catch(exception, host);
+
+    expect(captureMock).not.toHaveBeenCalled();
+    expect(status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'Bad input',
+        path: '/bad',
       }),
     );
   });

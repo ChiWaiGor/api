@@ -2,12 +2,16 @@ import {
   ArgumentsHost,
   Catch,
   ExceptionFilter,
+  HttpException,
   HttpStatus,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response, type Request } from 'express';
+import { ZodValidationException } from 'nestjs-zod';
 import { Env, captureSentryException } from '@app/shared';
 import type { JwtPayload } from '../../auth/types/jwt-payload.type';
+import { HttpExceptionFilter } from './http-exception.filter';
+import { ZodValidationExceptionFilter } from './zod-validation-exception.filter';
 
 type RequestWithUser = Request & {
   user?: JwtPayload;
@@ -15,9 +19,21 @@ type RequestWithUser = Request & {
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
+  private readonly httpExceptionFilter = new HttpExceptionFilter();
+  private readonly zodValidationExceptionFilter =
+    new ZodValidationExceptionFilter();
+
   constructor(private readonly config: ConfigService<Env, true>) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
+    if (exception instanceof ZodValidationException) {
+      return this.zodValidationExceptionFilter.catch(exception, host);
+    }
+
+    if (exception instanceof HttpException) {
+      return this.httpExceptionFilter.catch(exception, host);
+    }
+
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<RequestWithUser>();

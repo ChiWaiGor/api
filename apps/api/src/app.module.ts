@@ -107,9 +107,9 @@ const ZodValidationPipe = createZodValidationPipe({
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: EmailVerifiedGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_FILTER, useClass: ZodValidationExceptionFilter },
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
-    { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })
 export class AppModule {}
