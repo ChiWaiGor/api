@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import {
   ALL_PERMISSIONS,
   DEFAULT_USER_PERMISSIONS,
-} from '../src/rbac/permissions.constants';
+} from '../apps/api/src/rbac/permissions.constants';
 import { runSeedScript } from './seed-runner';
 
 /**

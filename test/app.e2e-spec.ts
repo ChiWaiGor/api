@@ -2,10 +2,9 @@ import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { AppModule } from '../src/app.module';
-import { MailService } from '../src/mail/mail.service';
-import { PrismaService } from '../src/prisma/prisma.service';
-import { RedisService } from '../src/redis/redis.service';
+import { MailQueueService } from '@app/queue';
+import { PrismaService, RedisService } from '@app/shared';
+import { AppModule } from '../apps/api/src/app.module';
 
 const extractVerificationTokenFromMail = (text: string): string => {
   const match = text.match(/token=([a-f0-9]{64})/);
@@ -44,15 +43,15 @@ describe('API (e2e)', () => {
     password = 'SecurePass1',
   ): Promise<VerifiedUser> => {
     const email = `${prefix}-${Date.now()}@example.com`;
-    const mailService = app.get(MailService);
-    const sendSpy = jest.spyOn(mailService, 'send');
+    const mailQueue = app.get(MailQueueService);
+    const enqueueSpy = jest.spyOn(mailQueue, 'enqueueSend');
 
     const registerRes = await request(app.getHttpServer())
       .post('/auth/register')
       .send({ email, password })
       .expect(201);
 
-    const verificationCall = sendSpy.mock.calls.find(
+    const verificationCall = enqueueSpy.mock.calls.find(
       ([msg]) =>
         msg.subject === 'Verify your email address' && msg.to === email,
     );
@@ -64,7 +63,7 @@ describe('API (e2e)', () => {
       .send({ token })
       .expect(200);
 
-    sendSpy.mockRestore();
+    enqueueSpy.mockRestore();
 
     const accessToken = registerRes.body.accessToken as string;
     const refreshToken = registerRes.body.refreshToken as string;
@@ -235,8 +234,8 @@ describe('API (e2e)', () => {
     });
 
     it('grants domain API access after register and email verification confirm', async () => {
-      const mailService = app.get(MailService);
-      const sendSpy = jest.spyOn(mailService, 'send');
+      const mailQueue = app.get(MailQueueService);
+      const enqueueSpy = jest.spyOn(mailQueue, 'enqueueSend');
       const email = `verified-${Date.now()}@example.com`;
       const password = 'SecurePass1';
 
@@ -255,7 +254,7 @@ describe('API (e2e)', () => {
           expect(res.body.message).toBe('Email verification required');
         });
 
-      const verificationCall = sendSpy.mock.calls.find(
+      const verificationCall = enqueueSpy.mock.calls.find(
         ([msg]) =>
           msg.subject === 'Verify your email address' && msg.to === email,
       );
@@ -267,7 +266,7 @@ describe('API (e2e)', () => {
         .send({ token })
         .expect(200);
 
-      sendSpy.mockRestore();
+      enqueueSpy.mockRestore();
 
       await request(app.getHttpServer())
         .get('/users?page=1&limit=5')
