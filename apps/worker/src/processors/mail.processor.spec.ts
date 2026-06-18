@@ -49,4 +49,32 @@ describe('MailProcessor', () => {
 
     expect(mailService.send).not.toHaveBeenCalled();
   });
+
+  it('reports send failures to Sentry and rethrows', async () => {
+    const captureMock = jest.spyOn(
+      await import('@app/shared'),
+      'captureSentryException',
+    );
+    const error = new Error('SMTP unavailable');
+    mailService.send.mockRejectedValueOnce(error);
+
+    const job = {
+      id: 'job-1',
+      name: MailJobName.Send,
+      data: {
+        to: 'user@example.com',
+        subject: 'Hello',
+        text: 'Body',
+      },
+    } as Job<MailMessage, void, MailJobName>;
+
+    await expect(processor.process(job)).rejects.toThrow('SMTP unavailable');
+    expect(captureMock).toHaveBeenCalledWith(error, {
+      queue: 'mail',
+      jobName: MailJobName.Send,
+      jobId: 'job-1',
+    });
+
+    captureMock.mockRestore();
+  });
 });

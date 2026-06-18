@@ -91,6 +91,29 @@ export const envSchema = z
       .optional()
       .default('false')
       .transform((v) => v === 'true' || v === '1'),
+    // Error tracking (Sentry). Leave SENTRY_DSN unset locally; set in staging/prod.
+    SENTRY_DSN: z
+      .string()
+      .optional()
+      .transform((v) => {
+        const trimmed = v?.trim();
+        return trimmed ? trimmed : undefined;
+      }),
+    SENTRY_ENVIRONMENT: z
+      .string()
+      .optional()
+      .transform((v) => {
+        const trimmed = v?.trim();
+        return trimmed ? trimmed : undefined;
+      }),
+    SENTRY_RELEASE: z
+      .string()
+      .optional()
+      .transform((v) => {
+        const trimmed = v?.trim();
+        return trimmed ? trimmed : undefined;
+      }),
+    SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'production') {

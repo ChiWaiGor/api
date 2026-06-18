@@ -9,10 +9,13 @@ import {
   buildRedisOptions,
   configuration,
   Env,
+  isSentryEnabled,
   PrismaModule,
   RedisModule,
 } from '@app/shared';
+import { SentryModule } from '@sentry/nestjs/setup';
 import { AuthModule } from './auth/auth.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ZodValidationExceptionFilter } from './common/filters/zod-validation-exception.filter';
 import { EmailVerifiedGuard } from './common/guards/email-verified.guard';
@@ -34,6 +37,7 @@ const ZodValidationPipe = createZodValidationPipe({
       envFilePath: ['.env.local', '.env'],
       load: [configuration],
     }),
+    ...(isSentryEnabled() ? [SentryModule.forRoot()] : []),
     LoggerModule.forRoot({
       pinoHttp: {
         transport:
@@ -105,6 +109,7 @@ const ZodValidationPipe = createZodValidationPipe({
     { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_FILTER, useClass: ZodValidationExceptionFilter },
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })
 export class AppModule {}

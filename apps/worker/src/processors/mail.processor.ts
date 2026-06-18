@@ -2,6 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { MailService } from '@app/mail';
+import { captureSentryException } from '@app/shared';
 import { MailJobData, MailJobName, QueueName } from '@app/queue';
 
 function mailWorkerConcurrency(): number {
@@ -26,6 +27,15 @@ export class MailProcessor extends WorkerHost {
       return;
     }
 
-    await this.mailService.send(job.data);
+    try {
+      await this.mailService.send(job.data);
+    } catch (error) {
+      captureSentryException(error, {
+        queue: QueueName.Mail,
+        jobName: job.name,
+        jobId: job.id,
+      });
+      throw error;
+    }
   }
 }
