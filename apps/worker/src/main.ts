@@ -1,4 +1,4 @@
-import './instrument';
+import './instrument'; // OTel + Sentry bootstrap before Nest
 
 import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';

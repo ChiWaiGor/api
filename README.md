@@ -197,7 +197,7 @@ builds the Docker image.
 
 Permissions are defined in code (`apps/api/src/rbac/permissions.constants.ts`) and synced via seed. They include `users:read`, `users:write`, `users:delete`, `roles:read`, `roles:manage`, `permissions:read`, and `permissions:manage` (the last is catalog-only; there is no runtime permission API).
 
-See **[docs/RBAC.md](docs/RBAC.md)** for system roles, mutation rules, audit logging, and a production checklist.
+See **[docs/RBAC.md](docs/RBAC.md)** for system roles, mutation rules, audit logging, and a production checklist. See **[docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)** for metrics, traces, and extending instrumentation.
 
 ### RBAC audit trail
 
@@ -222,6 +222,26 @@ Redis operations used for auth security run through a circuit breaker (opens aft
 
 - **Access-token blacklist checks** fail closed — if Redis is unavailable, tokens are treated as revoked.
 - **Permission cache reads** fall back to PostgreSQL when Redis is unavailable.
+
+## Observability (OpenTelemetry + Prometheus)
+
+Tracing and metrics are **opt-in** (disabled by default). See **[docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)** for:
+
+- Local quick start (metrics-only, Jaeger, Prometheus/Grafana)
+- Full metric catalog and example PromQL alerts
+- How to add custom metrics/spans for new domains and workers
+- Production scrape and OTLP collector setup
+
+| Variable                      | Default          | Description                                           |
+| ----------------------------- | ---------------- | ----------------------------------------------------- |
+| `OTEL_TRACES_ENABLED`         | `false`          | Export distributed traces via OTLP                    |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | _(unset)_        | Collector base URL (e.g. `http://localhost:4318`)     |
+| `OTEL_TRACES_SAMPLER_ARG`     | `0.1`            | Trace sampling ratio (0–1)                            |
+| `OTEL_SERVICE_NAME`           | `api` / `worker` | Service name in traces                                |
+| `METRICS_ENABLED`             | `false`          | Start Prometheus scrape server on `METRICS_PORT`      |
+| `METRICS_PORT`                | `9464`           | Metrics HTTP port (`/metrics`); use `9465` for worker |
+
+Built-in metrics include HTTP RED (`http_requests_total`, `http_request_duration_seconds`), auth counters, Redis health, and mail job stats. Logs include `trace_id` / `span_id` when observability is enabled. Sentry (`SENTRY_DSN`) complements OTel for error tracking.
 
 ## Project structure
 

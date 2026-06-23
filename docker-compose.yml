@@ -46,6 +46,13 @@ services:
       - '1025:1025'
       - '8025:8025'
 
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    restart: unless-stopped
+    ports:
+      - '16686:16686'
+      - '4318:4318'
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -129,9 +136,11 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-app}?schema=public
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      METRICS_PORT: 9464
     command: node dist/apps/api/main.js
     ports:
       - '${APP_PORT:-3000}:3000'
+      - '${METRICS_PORT:-9464}:9464'
     depends_on:
       postgres:
         condition: service_healthy
@@ -153,7 +162,10 @@ services:
       MAIL_TRANSPORT: smtp
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
+      METRICS_PORT: 9465
     command: node dist/apps/worker/main.js
+    ports:
+      - '${WORKER_METRICS_PORT:-9465}:9465'
     depends_on:
       postgres:
         condition: service_healthy

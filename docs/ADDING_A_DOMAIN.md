@@ -2,7 +2,7 @@
 
 Guide for adding a new business domain (e.g. `projects`, `invoices`) to this API. The **users** module is the reference implementation.
 
-For RBAC concepts, system roles, and audit logging, see **[RBAC.md](RBAC.md)**.
+For RBAC concepts, system roles, and audit logging, see **[RBAC.md](RBAC.md)**. For metrics, traces, and log correlation, see **[OBSERVABILITY.md](OBSERVABILITY.md)**.
 
 ---
 
@@ -136,7 +136,16 @@ After adding permissions:
 - [ ] E2e ([`test/app.e2e-spec.ts`](../test/app.e2e-spec.ts)): verified user without permission gets **403**; user with permission succeeds; unverified user gets **403 Email verification required** on domain routes.
 - [ ] Use `registerAndVerifyUser()` (or admin token) patterns from existing e2e helpers.
 
-### 8. Docs and deploy
+### 8. Observability
+
+HTTP routes and Prisma/Redis calls are **automatically** instrumented when `METRICS_ENABLED` or `OTEL_TRACES_ENABLED` is on — no module registration required. See **[OBSERVABILITY.md](OBSERVABILITY.md)** for local setup and production wiring.
+
+- [ ] **HTTP metrics/traces** — new controller routes appear in `http_requests_total` and trace backends with no extra code.
+- [ ] **Business metrics** (optional) — add counters in [`libs/shared/src/observability/metrics.util.ts`](../libs/shared/src/observability/metrics.util.ts) for domain KPIs (e.g. `orders_created_total`); call from your service.
+- [ ] **Custom spans** (optional) — use `trace.getTracer('cursor-3-{domain}')` for multi-step operations; avoid PII in attributes.
+- [ ] **Worker jobs** (if applicable) — record job success/failure + duration like [`MailProcessor`](../apps/worker/src/processors/mail.processor.ts).
+
+### 9. Docs and deploy
 
 - [ ] Add the module/routes to the API overview table in [`README.md`](../README.md) (optional but recommended).
 - [ ] Deploy order: `prisma migrate deploy` → `prisma:seed:catalog` (when catalog changed) → roll app (see [RBAC.md — Production checklist](RBAC.md#production-checklist)).
@@ -253,6 +262,34 @@ Attach `projects:read` to a test role via the RBAC API or seed, then confirm:
 
 ---
 
+## Observability
+
+New domain modules inherit global instrumentation — you do not register anything in `app.module.ts` for baseline coverage.
+
+| Signal                                                 | Automatic for new HTTP routes?                                                                     | Manual work needed?                                       |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `http_requests_total`, `http_request_duration_seconds` | Yes — global [`HttpMetricsInterceptor`](../apps/api/src/observability/http-metrics.interceptor.ts) | No                                                        |
+| HTTP / DB / Redis trace spans                          | Yes — OTel auto-instrumentation when `OTEL_TRACES_ENABLED=true`                                    | No                                                        |
+| `trace_id` in Pino logs                                | Yes — when observability env flags are on                                                          | No                                                        |
+| Domain KPI counters (e.g. `projects_archived_total`)   | No                                                                                                 | Add to `metrics.util.ts`, call from service               |
+| Fine-grained business spans                            | No                                                                                                 | `trace.getTracer('cursor-3-projects')` in service methods |
+
+**Example — record a domain event after a successful mutation:**
+
+```typescript
+import { recordProjectCreated } from '@app/shared';
+
+async create(body: CreateProjectBody) {
+  const project = await this.prisma.project.create({ /* ... */ });
+  recordProjectCreated('success'); // your helper in metrics.util.ts
+  return this.toResponse(project);
+}
+```
+
+Full local setup (metrics-only, Jaeger, Prometheus/Grafana), metric catalog, PromQL examples, and new-worker wiring: **[OBSERVABILITY.md](OBSERVABILITY.md)**.
+
+---
+
 ## Guard decorator quick reference
 
 | Decorator                                               | Effect                                                                      |
@@ -288,3 +325,4 @@ Attach `projects:read` to a test role via the RBAC API or seed, then confirm:
 | Reference domain module       | [`src/users/`](../src/users/)                                                                                         |
 | Seed                          | [`prisma/seed-catalog.ts`](../prisma/seed-catalog.ts), [`prisma/seed-admin.ts`](../prisma/seed-admin.ts)              |
 | RBAC overview                 | [RBAC.md](RBAC.md)                                                                                                    |
+| Observability                 | [OBSERVABILITY.md](OBSERVABILITY.md)                                                                                  |
