@@ -10,7 +10,15 @@ import { UserStatus } from '@prisma/client';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import { redisKeys } from '../common/constants/redis-keys';
 import { MailQueueService } from '@app/queue';
-import { Env, PrismaService, RedisService } from '@app/shared';
+import {
+  Env,
+  PrismaService,
+  RedisService,
+  recordAccountLockout,
+  recordLoginAttempt,
+  recordPasswordResetRequest,
+  recordRefreshAttempt,
+} from '@app/shared';
 import { RbacService } from '../rbac/rbac.service';
 import { AuthCryptoService } from './auth-crypto.service';
 import type {
@@ -80,26 +88,31 @@ export class AuthService {
       // Count failed attempts even for unknown emails to slow enumeration and
       // credential stuffing, then return a generic error.
       await this.registerFailedLogin(body.email);
+      recordLoginAttempt('invalid_credentials');
       throw new UnauthorizedException('Invalid credentials');
     }
 
     if (user.status === UserStatus.LOCKED) {
+      recordLoginAttempt('locked');
       throw new UnauthorizedException(
         'Account is locked due to too many failed login attempts. Reset your password to regain access.',
       );
     }
 
     if (user.status !== UserStatus.ACTIVE) {
+      recordLoginAttempt('inactive');
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const valid = await this.crypto.verify(user.passwordHash, body.password);
     if (!valid) {
       await this.registerFailedLogin(body.email, user.id);
+      recordLoginAttempt('invalid_credentials');
       throw new UnauthorizedException('Invalid credentials');
     }
 
     await this.clearFailedLogins(body.email);
+    recordLoginAttempt('success');
 
     return this.issueTokenPair(
       user.id,
@@ -118,6 +131,7 @@ export class AuthService {
         },
       );
     } catch {
+      recordRefreshAttempt('invalid');
       throw new UnauthorizedException('Invalid refresh token');
     }
 
@@ -133,6 +147,7 @@ export class AuthService {
     });
 
     if (!stored) {
+      recordRefreshAttempt('invalid');
       throw new UnauthorizedException('Invalid refresh token');
     }
 
@@ -143,6 +158,7 @@ export class AuthService {
       this.logger.warn(
         `Refresh token reuse detected for user ${stored.userId}; revoked token family ${stored.familyId}`,
       );
+      recordRefreshAttempt('reuse_detected');
       throw new UnauthorizedException('Invalid refresh token');
     }
 
@@ -150,6 +166,7 @@ export class AuthService {
       stored.expiresAt &&
       new Date(stored.expiresAt).getTime() <= Date.now()
     ) {
+      recordRefreshAttempt('invalid');
       throw new UnauthorizedException('Invalid refresh token');
     }
 
@@ -164,15 +181,18 @@ export class AuthService {
     });
 
     if (!user || user.deletedAt || user.status !== UserStatus.ACTIVE) {
+      recordRefreshAttempt('invalid');
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    return this.issueTokenPair(
+    const tokens = await this.issueTokenPair(
       user.id,
       user.email,
       user.roles.map((r) => r.role.name),
       stored.familyId,
     );
+    recordRefreshAttempt('success');
+    return tokens;
   }
 
   async logout(body: LogoutBody, accessJti?: string) {
@@ -242,6 +262,7 @@ export class AuthService {
 
     // Always respond identically to avoid leaking which emails are registered.
     if (user && !user.deletedAt) {
+      recordPasswordResetRequest();
       const { token, tokenHash } = this.generateSecret();
       const ttlMinutes = this.config.get('PASSWORD_RESET_TTL_MINUTES', {
         infer: true,
@@ -543,6 +564,7 @@ export class AuthService {
         data: { status: UserStatus.LOCKED },
       });
       await this.invalidateUserSessionStateCache(userId);
+      recordAccountLockout();
       this.logger.warn(
         `User ${userId} locked after ${count} failed login attempts`,
       );

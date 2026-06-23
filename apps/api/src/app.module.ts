@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { createZodValidationPipe } from 'nestjs-zod';
 import { LoggerModule } from 'nestjs-pino';
@@ -9,6 +9,7 @@ import {
   buildRedisOptions,
   configuration,
   Env,
+  getOtelLogFields,
   isSentryEnabled,
   PrismaModule,
   RedisModule,
@@ -23,6 +24,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler-storage';
 import { HealthModule } from './health/health.module';
+import { HttpMetricsInterceptor } from './observability/http-metrics.interceptor';
 import { RbacModule } from './rbac/rbac.module';
 import { UsersModule } from './users/users.module';
 
@@ -47,6 +49,7 @@ const ZodValidationPipe = createZodValidationPipe({
         autoLogging: true,
         genReqId: (req) =>
           (req.headers['x-request-id'] as string) ?? crypto.randomUUID(),
+        customProps: () => getOtelLogFields(),
         redact: {
           paths: [
             'req.headers.authorization',
@@ -103,6 +106,7 @@ const ZodValidationPipe = createZodValidationPipe({
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },
+    { provide: APP_INTERCEPTOR, useClass: HttpMetricsInterceptor },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: EmailVerifiedGuard },

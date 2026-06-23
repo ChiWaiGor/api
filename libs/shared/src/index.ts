@@ -7,3 +7,4 @@ export * from './redis/redis.service';
 export * from './redis/redis-options';
 export * from './redis/redis-circuit-breaker';
 export * from './sentry';
+export * from './observability';

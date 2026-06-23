@@ -2,8 +2,8 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { MailService } from '@app/mail';
-import { captureSentryException } from '@app/shared';
 import { MailJobData, MailJobName, QueueName } from '@app/queue';
+import { captureSentryException, recordMailJob } from '@app/shared';
 
 function mailWorkerConcurrency(): number {
   const value = process.env.MAIL_WORKER_CONCURRENCY;
@@ -27,9 +27,12 @@ export class MailProcessor extends WorkerHost {
       return;
     }
 
+    const startedAt = Date.now();
     try {
       await this.mailService.send(job.data);
+      recordMailJob('success', Date.now() - startedAt);
     } catch (error) {
+      recordMailJob('failure', Date.now() - startedAt);
       captureSentryException(error, {
         queue: QueueName.Mail,
         jobName: job.name,

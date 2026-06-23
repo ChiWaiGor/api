@@ -114,6 +114,35 @@ export const envSchema = z
         return trimmed ? trimmed : undefined;
       }),
     SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0),
+    // OpenTelemetry distributed tracing. Export spans to an OTLP collector
+    // (Jaeger, Grafana Tempo, Honeycomb, etc.). Requires OTEL_EXPORTER_OTLP_ENDPOINT.
+    OTEL_TRACES_ENABLED: z
+      .string()
+      .optional()
+      .default('false')
+      .transform((v) => v === 'true' || v === '1'),
+    OTEL_EXPORTER_OTLP_ENDPOINT: z
+      .string()
+      .optional()
+      .transform((v) => {
+        const trimmed = v?.trim();
+        return trimmed ? trimmed : undefined;
+      }),
+    OTEL_TRACES_SAMPLER_ARG: z.coerce.number().min(0).max(1).default(0.1),
+    OTEL_SERVICE_NAME: z
+      .string()
+      .optional()
+      .transform((v) => {
+        const trimmed = v?.trim();
+        return trimmed ? trimmed : undefined;
+      }),
+    // Prometheus metrics scrape endpoint (separate HTTP server on METRICS_PORT).
+    METRICS_ENABLED: z
+      .string()
+      .optional()
+      .default('false')
+      .transform((v) => v === 'true' || v === '1'),
+    METRICS_PORT: z.coerce.number().int().positive().default(9464),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'production') {

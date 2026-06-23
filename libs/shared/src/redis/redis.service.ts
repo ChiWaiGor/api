@@ -7,6 +7,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { Env } from '../config/env.schema';
+import {
+  recordRedisCircuitState,
+  recordRedisOperationError,
+} from '../observability/metrics.util';
 import { RedisCircuitBreaker } from './redis-circuit-breaker';
 import { buildRedisOptions } from './redis-options';
 
@@ -29,6 +33,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     this.client.on('error', (err) =>
       this.logger.error(`Redis error: ${err.message}`),
     );
+    recordRedisCircuitState(this.circuitBreaker.getState());
   }
 
   async onModuleDestroy() {
@@ -115,6 +120,14 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   private async execute<T>(fn: () => Promise<T>): Promise<T> {
     await this.connect();
-    return this.circuitBreaker.execute(fn);
+    try {
+      const result = await this.circuitBreaker.execute(fn);
+      recordRedisCircuitState(this.circuitBreaker.getState());
+      return result;
+    } catch (error) {
+      recordRedisOperationError();
+      recordRedisCircuitState(this.circuitBreaker.getState());
+      throw error;
+    }
   }
 }
