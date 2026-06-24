@@ -189,7 +189,7 @@ service containers), plus a job that builds the Docker image.
 
 ### Coverage policy
 
-Unit tests enforce **90% lines and 90% branches** on `*.service.ts` files only
+Unit tests enforce **90% lines and 80% branches** on `*.service.ts` files only
 (see the `jest` config in `package.json`). Controllers, `main.ts`, modules, and
 schemas are excluded from coverage collection — HTTP and validation behavior is
 covered by e2e tests instead.

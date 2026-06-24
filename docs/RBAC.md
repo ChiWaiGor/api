@@ -92,7 +92,7 @@ LIMIT 50;
 
 ## Test coverage
 
-- **Unit tests** enforce 90% lines and 90% branches on `*.service.ts` files
+- **Unit tests** enforce 90% lines and 80% branches on `*.service.ts` files
   (`npm run test:cov`). Controllers, modules, schemas, and `main.ts` are
   excluded — HTTP RBAC behavior is covered by e2e instead.
 - **E2E** (`test/rbac.e2e-spec.ts`) exercises RBAC mutations end-to-end:
