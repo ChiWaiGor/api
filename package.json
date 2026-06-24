@@ -24,7 +24,7 @@
     "lint:ci": "eslint \"{src,apps,libs,test,prisma}/**/*.ts\"",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\" \"test/**/*.ts\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "validate": "npm run lint:ci && npm run typecheck && npm run test",
+    "validate": "npm run lint:ci && npm run typecheck && npm run test:cov",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
@@ -123,10 +123,16 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "apps/**/*.(t|j)s",
-      "libs/**/*.(t|j)s"
+      "apps/**/*.service.ts",
+      "libs/**/*.service.ts"
     ],
     "coverageDirectory": "./coverage",
+    "coverageThreshold": {
+      "global": {
+        "lines": 90,
+        "branches": 80
+      }
+    },
     "testEnvironment": "node",
     "moduleNameMapper": {
       "^@app/shared$": "<rootDir>/libs/shared/src",

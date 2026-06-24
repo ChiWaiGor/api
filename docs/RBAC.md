@@ -4,11 +4,11 @@ Role-based access control for this API: permissions are defined in code, synced 
 
 ## Concepts
 
-| Concept        | Source                              | Notes                                                                                       |
-| -------------- | ----------------------------------- | ------------------------------------------------------------------------------------------- |
-| **Permission** | `src/rbac/permissions.constants.ts` | Capability strings (e.g. `users:read`). Add new permissions in code, deploy, then run seed. |
-| **Role**       | Database                            | Named bundles of permissions. `admin` and `user` are system roles (`isSystem: true`).       |
-| **Assignment** | `UserRole` / `RolePermission`       | Links users to roles and permissions to roles.                                              |
+| Concept        | Source                                       | Notes                                                                                       |
+| -------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Permission** | `apps/api/src/rbac/permissions.constants.ts` | Capability strings (e.g. `users:read`). Add new permissions in code, deploy, then run seed. |
+| **Role**       | Database                                     | Named bundles of permissions. `admin` and `user` are system roles (`isSystem: true`).       |
+| **Assignment** | `UserRole` / `RolePermission`                | Links users to roles and permissions to roles.                                              |
 
 ## System roles
 
@@ -89,4 +89,13 @@ LIMIT 50;
 - [ ] Restrict who receives `roles:manage` / `admin` role.
 - [ ] Monitor `rbac.audit` logs and/or `RbacAuditLog` for suspicious changes.
 - [ ] Ensure Redis is available (blacklist fail-closed; permission cache falls back to DB).
-- [ ] Add E2E coverage for RBAC mutations in CI (optional but recommended).
+
+## Test coverage
+
+- **Unit tests** enforce 90% lines and 80% branches on `*.service.ts` files
+  (`npm run test:cov`). Controllers, modules, schemas, and `main.ts` are
+  excluded — HTTP RBAC behavior is covered by e2e instead.
+- **E2E** (`test/rbac.e2e-spec.ts`) exercises RBAC mutations end-to-end:
+  create/update/delete custom roles, assign/unassign, attach/detach permissions,
+  system-role protection, last-admin guard, non-admin forbidden responses, and
+  `RbacAuditLog` rows for each mutation.

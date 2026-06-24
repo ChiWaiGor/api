@@ -70,4 +70,39 @@ describe('RbacAuditService', () => {
     expect(Logger.prototype.error).toHaveBeenCalled();
     expect(Logger.prototype.log).toHaveBeenCalled();
   });
+
+  it('handles non-Error persistence failures', async () => {
+    prisma.rbacAuditLog.create.mockRejectedValue('db down');
+
+    await expect(
+      service.record({
+        action: RbacAuditAction.ROLE_DELETED,
+        context: { actorId: 'actor-1', actorEmail: 'admin@example.com' },
+        targetRoleId: 'role-1',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(Logger.prototype.error).toHaveBeenCalled();
+  });
+
+  it('persists optional targetPermissionId when provided', async () => {
+    prisma.rbacAuditLog.create.mockResolvedValue({ id: 'log-2' });
+
+    await service.record({
+      action: RbacAuditAction.PERMISSION_ATTACHED,
+      context: {
+        actorId: 'actor-1',
+        actorEmail: 'admin@example.com',
+      },
+      targetRoleId: 'role-1',
+      targetPermissionId: 'perm-1',
+    });
+
+    expect(prisma.rbacAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        targetPermissionId: 'perm-1',
+        metadata: undefined,
+      }),
+    });
+  });
 });
