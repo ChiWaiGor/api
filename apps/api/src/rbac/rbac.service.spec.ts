@@ -98,6 +98,20 @@ describe('RbacService', () => {
     jest.clearAllMocks();
   });
 
+  describe('listRoles', () => {
+    it('returns roles with permissions', async () => {
+      prisma.role.findMany.mockResolvedValue([customRole]);
+      await expect(service.listRoles()).resolves.toEqual([customRole]);
+    });
+  });
+
+  describe('listPermissions', () => {
+    it('returns catalog permissions', async () => {
+      prisma.permission.findMany.mockResolvedValue([]);
+      await expect(service.listPermissions()).resolves.toEqual([]);
+    });
+  });
+
   describe('getUserRoles', () => {
     it('returns role names', async () => {
       prisma.userRole.findMany.mockResolvedValue([
@@ -142,6 +156,22 @@ describe('RbacService', () => {
         [PERMISSIONS.USERS_READ, PERMISSIONS.USERS_WRITE],
         300,
       );
+    });
+
+    it('returns permissions when cache write fails', async () => {
+      redis.getJson.mockResolvedValue(null);
+      prisma.userRole.findMany.mockResolvedValue([
+        {
+          role: {
+            permissions: [{ permission: { action: PERMISSIONS.USERS_READ } }],
+          },
+        },
+      ]);
+      redis.setJson.mockRejectedValue(new Error('redis down'));
+
+      await expect(service.getUserPermissions('u1')).resolves.toEqual([
+        PERMISSIONS.USERS_READ,
+      ]);
     });
 
     it('falls back to db when redis read fails', async () => {
@@ -465,6 +495,35 @@ describe('RbacService', () => {
         service.detachPermissionFromRole(body, auditCtx),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(prisma.rolePermission.delete).not.toHaveBeenCalled();
+    });
+
+    it('allows detaching non-protected permission from system user role', async () => {
+      prisma.role.findUnique.mockResolvedValue(userRole);
+      prisma.permission.findUnique.mockResolvedValue({
+        id: 'p1',
+        action: PERMISSIONS.USERS_WRITE,
+      });
+      prisma.rolePermission.delete.mockResolvedValue({});
+      prisma.userRole.findMany.mockResolvedValue([]);
+
+      await expect(
+        service.detachPermissionFromRole(
+          { roleId: 'user-r', permissionId: 'p1' },
+          auditCtx,
+        ),
+      ).resolves.toEqual({ success: true });
+    });
+
+    it('throws when permission is not found', async () => {
+      prisma.role.findUnique.mockResolvedValue(customRole);
+      prisma.permission.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.attachPermissionToRole(
+          { roleId: 'r1', permissionId: 'missing' },
+          auditCtx,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('detaches permission from non-system role', async () => {

@@ -18,6 +18,12 @@ process.env.THROTTLE_AUTH_LIMIT = '100';
 
 process.env.MAIL_TRANSPORT = 'log';
 
+// Keep lockout e2e fast and deterministic.
+process.env.LOGIN_MAX_FAILED_ATTEMPTS =
+  process.env.LOGIN_MAX_FAILED_ATTEMPTS ?? '3';
+process.env.LOGIN_LOCKOUT_WINDOW_SECONDS =
+  process.env.LOGIN_LOCKOUT_WINDOW_SECONDS ?? '300';
+
 // E2E isolation when POSTGRES_E2E_DB is set (local and CI).
 if (process.env.POSTGRES_E2E_DB) {
   process.env.REDIS_DB = process.env.REDIS_E2E_DB ?? '15';

@@ -183,9 +183,19 @@ The container exposes a Docker `HEALTHCHECK` against `/health`, binds to
 ## CI
 
 `.github/workflows/ci.yml` runs on pushes/PRs to `main`: install -> Prisma
-generate -> lint -> typecheck -> build -> migrate + seed -> unit tests (with
-coverage) -> e2e (against Postgres/Redis service containers), plus a job that
-builds the Docker image.
+generate -> lint -> typecheck -> build -> migrate + seed -> unit tests with
+**service coverage gates** (`npm run test:cov`) -> e2e (against Postgres/Redis
+service containers), plus a job that builds the Docker image.
+
+### Coverage policy
+
+Unit tests enforce **90% lines and 90% branches** on `*.service.ts` files only
+(see the `jest` config in `package.json`). Controllers, `main.ts`, modules, and
+schemas are excluded from coverage collection — HTTP and validation behavior is
+covered by e2e tests instead.
+
+The **pre-push** hook runs `npm run test:cov` (not plain `npm run test`) so
+coverage gates apply locally before push.
 
 ## API overview
 
@@ -259,35 +269,35 @@ The API enqueues jobs (e.g. outbound email) via `libs/queue`; the worker consume
 
 ## Scripts
 
-| Script                        | Description                               |
-| ----------------------------- | ----------------------------------------- |
-| `npm run dev:bootstrap`       | Start infra, migrate/seed dev + e2e DBs   |
-| `npm run start:dev`           | API dev server with watch                 |
-| `npm run start:dev:worker`    | Worker dev process with watch             |
-| `npm run build`               | Production build (api + worker)           |
-| `npm run start:prod:api`      | Run compiled API                          |
-| `npm run start:prod:worker`   | Run compiled worker                       |
-| `npm run lint`                | ESLint with autofix                       |
-| `npm run lint:ci`             | ESLint without autofix (CI)               |
-| `npm run typecheck`           | `tsc --noEmit` type check                 |
-| `npm run validate`            | Lint, typecheck, and unit tests           |
-| `npm run test`                | Unit tests                                |
-| `npm run test:e2e`            | E2E tests (requires DB + Redis)           |
-| `npm run e2e:prepare`         | Migrate/seed E2E database                 |
-| `npm run prisma:migrate`      | Apply migrations (dev)                    |
-| `npm run prisma:deploy`       | Apply migrations (prod)                   |
-| `npm run prisma:seed`         | Seed catalog + admin (dev / CI)           |
-| `npm run prisma:seed:catalog` | Sync permissions and system roles         |
-| `npm run prisma:seed:admin`   | Bootstrap admin (or rotate with env flag) |
+| Script                        | Description                                                 |
+| ----------------------------- | ----------------------------------------------------------- |
+| `npm run dev:bootstrap`       | Start infra, migrate/seed dev + e2e DBs                     |
+| `npm run start:dev`           | API dev server with watch                                   |
+| `npm run start:dev:worker`    | Worker dev process with watch                               |
+| `npm run build`               | Production build (api + worker)                             |
+| `npm run start:prod:api`      | Run compiled API                                            |
+| `npm run start:prod:worker`   | Run compiled worker                                         |
+| `npm run lint`                | ESLint with autofix                                         |
+| `npm run lint:ci`             | ESLint without autofix (CI)                                 |
+| `npm run typecheck`           | `tsc --noEmit` type check                                   |
+| `npm run validate`            | Lint, typecheck, and unit tests with service coverage gates |
+| `npm run test`                | Unit tests                                                  |
+| `npm run test:e2e`            | E2E tests (requires DB + Redis)                             |
+| `npm run e2e:prepare`         | Migrate/seed E2E database                                   |
+| `npm run prisma:migrate`      | Apply migrations (dev)                                      |
+| `npm run prisma:deploy`       | Apply migrations (prod)                                     |
+| `npm run prisma:seed`         | Seed catalog + admin (dev / CI)                             |
+| `npm run prisma:seed:catalog` | Sync permissions and system roles                           |
+| `npm run prisma:seed:admin`   | Bootstrap admin (or rotate with env flag)                   |
 
 ## Git hooks
 
 Hooks install automatically when you run `npm install` (via the `prepare` script).
 
-| Hook           | Runs                                                                            |
-| -------------- | ------------------------------------------------------------------------------- |
-| **pre-commit** | ESLint `--fix` and Prettier on staged files under `{src,apps,libs,test,prisma}` |
-| **pre-push**   | `npm run lint:ci`, `npm run typecheck` and `npm run test`                       |
+| Hook           | Runs                                                                                   |
+| -------------- | -------------------------------------------------------------------------------------- |
+| **pre-commit** | ESLint `--fix` and Prettier on staged files under `{src,apps,libs,test,prisma}`        |
+| **pre-push**   | `npm run lint:ci`, `npm run typecheck` and `npm run test:cov` (service coverage gates) |
 
 Run the same checks manually without pushing:
 
@@ -306,9 +316,21 @@ git push --no-verify
 
 ```bash
 npm run dev:bootstrap   # or: docker compose up -d && migrate/seed steps below
-npm run test
-npm run test:e2e
+npm run test:cov        # unit tests with service coverage gates
+npm run test:e2e        # domain-split e2e suites
 ```
+
+E2E tests are split by domain under `test/`:
+
+| File                 | Scope                                                                       |
+| -------------------- | --------------------------------------------------------------------------- |
+| `auth.e2e-spec.ts`   | Register/login/refresh, email verification, password reset, account lockout |
+| `rbac.e2e-spec.ts`   | Role/permission reads, RBAC mutations, audit log verification               |
+| `users.e2e-spec.ts`  | User listing, self-update guards, deactivation                              |
+| `health.e2e-spec.ts` | Liveness and readiness probes                                               |
+
+Shared setup lives in `test/e2e-helpers.ts` (app bootstrap, admin login, verified
+user factory, teardown). `test/e2e-setup.ts` loads env and isolates the e2e DB.
 
 E2E uses `POSTGRES_E2E_DB` (default `app_e2e`, ensured on every `docker compose up`)
 and `REDIS_E2E_DB` (default `15`) in both local and CI. Unit tests use the `app`

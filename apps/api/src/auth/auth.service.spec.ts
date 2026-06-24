@@ -398,6 +398,14 @@ describe('AuthService', () => {
         ),
       ).toThrow(UnauthorizedException);
     });
+
+    it('rejects inactive users with the inactive message', () => {
+      expect(() =>
+        service.assertActiveSession(
+          toUserSessionState({ ...activeUser, status: UserStatus.INACTIVE }),
+        ),
+      ).toThrow('Account is inactive');
+    });
   });
 
   describe('invalidateUserSessionStateCache', () => {
@@ -452,6 +460,25 @@ describe('AuthService', () => {
           data: { revokedAt: expect.any(Date) },
         }),
       );
+    });
+
+    it('rejects an expired refresh token', async () => {
+      jwt.verifyAsync.mockResolvedValue({
+        sub: 'user-1',
+        tokenId: 'rt-1',
+        jti: 'jti',
+      });
+      prisma.refreshToken.findFirst.mockResolvedValue({
+        id: 'rt-1',
+        userId: 'user-1',
+        familyId: 'fam-1',
+        revokedAt: null,
+        expiresAt: new Date(Date.now() - 60_000),
+      });
+
+      await expect(
+        service.refresh({ refreshToken: 'token' }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
     it('preserves the family id when rotating an active token', async () => {
@@ -530,6 +557,29 @@ describe('AuthService', () => {
       await service.login({ email: 'a@b.com', password: 'right' });
 
       expect(redis.del).toHaveBeenCalledWith(redisKeys.failedLogins('a@b.com'));
+    });
+
+    it('still succeeds when clearing failed-login counter fails', async () => {
+      prisma.user.findUnique.mockResolvedValue(activeUser);
+      crypto.verify.mockResolvedValue(true);
+      redis.del.mockRejectedValue(new Error('redis down'));
+      setupTokenMocks();
+
+      await expect(
+        service.login({ email: 'a@b.com', password: 'right' }),
+      ).resolves.toBeDefined();
+    });
+
+    it('skips lockout bookkeeping when redis is unavailable', async () => {
+      prisma.user.findUnique.mockResolvedValue(activeUser);
+      crypto.verify.mockResolvedValue(false);
+      redis.incrWithTtl.mockRejectedValue(new Error('redis down'));
+
+      await expect(
+        service.login({ email: 'a@b.com', password: 'wrong' }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
 
@@ -650,9 +700,46 @@ describe('AuthService', () => {
         }),
       );
     });
+
+    it('skips failed-login cleanup when the user record is missing', async () => {
+      prisma.passwordResetToken.findUnique.mockResolvedValue({
+        id: 'prt-1',
+        userId: 'user-1',
+        usedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      crypto.hash.mockResolvedValue('new-hash');
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await service.confirmPasswordReset({
+        token: 'good',
+        newPassword: 'NewPass123',
+      });
+
+      expect(redis.del).not.toHaveBeenCalledWith(
+        redisKeys.failedLogins('a@b.com'),
+      );
+    });
   });
 
   describe('email verification', () => {
+    it('rejects when user is missing or deleted', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.requestEmailVerification('missing'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+
+      prisma.user.findUnique.mockResolvedValue({
+        ...activeUser,
+        deletedAt: new Date(),
+      });
+
+      await expect(
+        service.requestEmailVerification('user-1'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
     it('is a no-op when the email is already verified', async () => {
       prisma.user.findUnique.mockResolvedValue({
         ...activeUser,

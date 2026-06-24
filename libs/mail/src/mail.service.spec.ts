@@ -127,6 +127,46 @@ describe('MailService', () => {
       });
     });
 
+    it('passes auth when only SMTP password is set', async () => {
+      const service = await buildModule({
+        MAIL_TRANSPORT: 'smtp',
+        MAIL_FROM: 'no-reply@example.com',
+        SMTP_HOST: 'localhost',
+        SMTP_PORT: 1025,
+        SMTP_PASSWORD: 'secret-only',
+        SMTP_SECURE: false,
+      });
+
+      service.onModuleInit();
+
+      expect(nodemailer.createTransport).toHaveBeenCalledWith({
+        host: 'localhost',
+        port: 1025,
+        secure: false,
+        auth: { user: '', pass: 'secret-only' },
+      });
+    });
+
+    it('passes auth when only SMTP user is set', async () => {
+      const service = await buildModule({
+        MAIL_TRANSPORT: 'smtp',
+        MAIL_FROM: 'no-reply@example.com',
+        SMTP_HOST: 'localhost',
+        SMTP_PORT: 1025,
+        SMTP_USER: 'apikey',
+        SMTP_SECURE: false,
+      });
+
+      service.onModuleInit();
+
+      expect(nodemailer.createTransport).toHaveBeenCalledWith({
+        host: 'localhost',
+        port: 1025,
+        secure: false,
+        auth: { user: 'apikey', pass: '' },
+      });
+    });
+
     it('logs and rethrows when SMTP send fails', async () => {
       mockSendMail.mockRejectedValueOnce(new Error('connection refused'));
       const service = await buildModule({
@@ -152,6 +192,56 @@ describe('MailService', () => {
         'Failed to send mail to user@example.com: connection refused',
         expect.any(String),
       );
+    });
+
+    it('logs non-Error SMTP failures without a stack trace', async () => {
+      mockSendMail.mockRejectedValueOnce('smtp down');
+      const service = await buildModule({
+        MAIL_TRANSPORT: 'smtp',
+        MAIL_FROM: 'no-reply@example.com',
+        SMTP_HOST: 'localhost',
+        SMTP_PORT: 1025,
+        SMTP_USER: '',
+        SMTP_PASSWORD: '',
+        SMTP_SECURE: false,
+      });
+
+      service.onModuleInit();
+      await expect(
+        service.send({
+          to: 'user@example.com',
+          subject: 'Hello',
+          text: 'Body',
+        }),
+      ).rejects.toBe('smtp down');
+
+      expect(Logger.prototype.error).toHaveBeenCalledWith(
+        'Failed to send mail to user@example.com: smtp down',
+        undefined,
+      );
+    });
+
+    it('logs an error when SMTP transport is not initialized', async () => {
+      const service = await buildModule({
+        MAIL_TRANSPORT: 'smtp',
+        MAIL_FROM: 'no-reply@example.com',
+        SMTP_HOST: 'localhost',
+        SMTP_PORT: 1025,
+        SMTP_USER: '',
+        SMTP_PASSWORD: '',
+        SMTP_SECURE: false,
+      });
+
+      await service.send({
+        to: 'user@example.com',
+        subject: 'Hello',
+        text: 'Body',
+      });
+
+      expect(Logger.prototype.error).toHaveBeenCalledWith(
+        'SMTP transport not initialized',
+      );
+      expect(mockSendMail).not.toHaveBeenCalled();
     });
   });
 });

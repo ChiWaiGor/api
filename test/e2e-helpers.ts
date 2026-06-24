@@ -1,0 +1,140 @@
+import { INestApplication } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import request from 'supertest';
+import { App } from 'supertest/types';
+import { MailQueueService } from '@app/queue';
+import { PrismaService, RedisService } from '@app/shared';
+import { AppModule } from '../apps/api/src/app.module';
+
+export const adminCredentials = {
+  email: process.env.SEED_ADMIN_EMAIL ?? 'admin@example.com',
+  password: process.env.SEED_ADMIN_PASSWORD ?? 'Admin123!@#',
+};
+
+export type VerifiedUser = {
+  email: string;
+  password: string;
+  accessToken: string;
+  refreshToken: string;
+  userId: string;
+};
+
+export const uniqueName = (prefix: string): string =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+export const extractTokenFromMail = (text: string, path: string): string => {
+  const match = text.match(
+    new RegExp(`${path.replace('/', '\\/')}\\?token=([a-f0-9]{64})`),
+  );
+  if (!match) {
+    throw new Error(`Token not found in mail body for path ${path}`);
+  }
+  return match[1];
+};
+
+export const extractVerificationTokenFromMail = (text: string): string =>
+  extractTokenFromMail(text, '/verify-email');
+
+export const extractPasswordResetTokenFromMail = (text: string): string =>
+  extractTokenFromMail(text, '/reset-password');
+
+export async function createE2eApp(): Promise<INestApplication<App>> {
+  const moduleFixture: TestingModule = await Test.createTestingModule({
+    imports: [AppModule],
+  }).compile();
+
+  const app = moduleFixture.createNestApplication();
+  await app.init();
+
+  const redis = app.get(RedisService);
+  await redis.connect();
+  await redis.getClient().flushdb();
+
+  const prisma = app.get(PrismaService);
+  await prisma.user.updateMany({
+    where: { email: adminCredentials.email, emailVerifiedAt: null },
+    data: { emailVerifiedAt: new Date() },
+  });
+
+  return app;
+}
+
+export async function teardownE2eApp(
+  app: INestApplication<App>,
+): Promise<void> {
+  if (!app) return;
+  try {
+    const prisma = app.get(PrismaService);
+    await prisma.rbacAuditLog.deleteMany();
+    await prisma.user.deleteMany({
+      where: { email: { not: adminCredentials.email } },
+    });
+    await prisma.role.deleteMany({ where: { isSystem: false } });
+  } catch {
+    // DB cleanup is best-effort if setup failed early.
+  }
+  try {
+    const redis = app.get(RedisService);
+    await redis.getClient()?.flushdb();
+  } catch {
+    // Redis may not have connected if setup failed early.
+  }
+  await app.close();
+}
+
+export async function loginAdmin(app: INestApplication<App>): Promise<string> {
+  const res = await request(app.getHttpServer())
+    .post('/auth/login')
+    .send(adminCredentials);
+
+  expect(res.status).toBe(201);
+  expect(res.body.accessToken).toBeDefined();
+  return res.body.accessToken as string;
+}
+
+export async function registerAndVerifyUser(
+  app: INestApplication<App>,
+  prefix: string,
+  password = 'SecurePass1',
+): Promise<VerifiedUser> {
+  const email = `${uniqueName(prefix)}@example.com`;
+  const mailQueue = app.get(MailQueueService);
+  const enqueueSpy = jest.spyOn(mailQueue, 'enqueueSend');
+
+  const registerRes = await request(app.getHttpServer())
+    .post('/auth/register')
+    .send({ email, password })
+    .expect(201);
+
+  const verificationCall = enqueueSpy.mock.calls.find(
+    ([msg]) => msg.subject === 'Verify your email address' && msg.to === email,
+  );
+  expect(verificationCall).toBeDefined();
+  const token = extractVerificationTokenFromMail(verificationCall![0].text);
+
+  await request(app.getHttpServer())
+    .post('/auth/email-verification/confirm')
+    .send({ token })
+    .expect(200);
+
+  enqueueSpy.mockRestore();
+
+  const accessToken = registerRes.body.accessToken as string;
+  const refreshToken = registerRes.body.refreshToken as string;
+
+  const meRes = await request(app.getHttpServer())
+    .get('/auth/me')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .expect(200)
+    .expect((res) => {
+      expect(res.body.emailVerified).toBe(true);
+    });
+
+  return {
+    email,
+    password,
+    accessToken,
+    refreshToken,
+    userId: meRes.body.id as string,
+  };
+}
