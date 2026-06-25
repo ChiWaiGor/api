@@ -89,6 +89,8 @@ LIMIT 50;
 - [ ] Restrict who receives `roles:manage` / `admin` role.
 - [ ] Monitor `rbac.audit` logs and/or `RbacAuditLog` for suspicious changes.
 - [ ] Ensure Redis is available (blacklist fail-closed; permission cache falls back to DB).
+- [ ] Postgres backups + PITR (or scheduled `npm run backup:postgres` off-host); see [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md).
+- [ ] Restore drill completed (monthly pre-launch, quarterly in production) with verification checklist.
 
 ## Test coverage
 

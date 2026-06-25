@@ -37,7 +37,10 @@
     "prisma:seed": "prisma db seed",
     "prisma:seed:catalog": "ts-node --transpile-only prisma/seed-catalog.ts",
     "prisma:seed:admin": "ts-node --transpile-only prisma/seed-admin.ts",
-    "prisma:deploy": "prisma migrate deploy"
+    "prisma:deploy": "prisma migrate deploy",
+    "backup:postgres": "sh scripts/backup-postgres.sh",
+    "backup:redis": "sh scripts/backup-redis.sh",
+    "restore:postgres": "sh scripts/restore-postgres.sh"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

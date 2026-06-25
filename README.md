@@ -179,6 +179,10 @@ The container exposes a Docker `HEALTHCHECK` against `/health`, binds to
   rotation. `prisma:seed` runs both (local dev / CI only).
 - **Logs**: sensitive fields (`authorization` header, passwords, tokens) are
   redacted from structured logs.
+- **Backups & DR**: default RPO 15 minutes / RTO 1 hour. See
+  **[docs/DISASTER_RECOVERY.md](docs/DISASTER_RECOVERY.md)** for Postgres/Redis
+  policies, restore order, and drill cadence. Local snapshots:
+  `npm run backup:postgres`, `npm run backup:redis`.
 
 ## CI
 
@@ -289,6 +293,9 @@ The API enqueues jobs (e.g. outbound email) via `libs/queue`; the worker consume
 | `npm run prisma:seed`         | Seed catalog + admin (dev / CI)                             |
 | `npm run prisma:seed:catalog` | Sync permissions and system roles                           |
 | `npm run prisma:seed:admin`   | Bootstrap admin (or rotate with env flag)                   |
+| `npm run backup:postgres`     | Postgres `pg_dump` snapshot → `backups/postgres/`           |
+| `npm run backup:redis`        | Redis RDB snapshot → `backups/redis/`                       |
+| `npm run restore:postgres`    | Restore from `.dump` file (pass `--force` as second arg)    |
 
 ## Git hooks
 
