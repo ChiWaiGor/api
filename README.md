@@ -179,6 +179,10 @@ The container exposes a Docker `HEALTHCHECK` against `/health`, binds to
   rotation. `prisma:seed` runs both (local dev / CI only).
 - **Logs**: sensitive fields (`authorization` header, passwords, tokens) are
   redacted from structured logs.
+- **Trust proxy**: set `TRUST_PROXY=false` for local/direct connections (default).
+  Behind one cloud load balancer use `TRUST_PROXY=1`. For stricter production,
+  use comma-separated trusted proxy CIDRs/IPs (e.g. `10.0.0.0/8,172.16.0.0/12`)
+  so `req.ip` and RBAC audit IPs reflect the real client, not the LB.
 - **Backups & DR**: default RPO 15 minutes / RTO 1 hour. See
   **[docs/DISASTER_RECOVERY.md](docs/DISASTER_RECOVERY.md)** for Postgres/Redis
   policies, restore order, and drill cadence. Local snapshots:

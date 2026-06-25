@@ -2,6 +2,7 @@ import './instrument';
 
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
@@ -10,12 +11,19 @@ import { Env } from '@app/shared';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: true,
+  });
   app.useLogger(app.get(Logger));
 
   const config = app.get(ConfigService<Env, true>);
   const port = config.get('PORT', { infer: true });
   const corsOrigins = config.get('CORS_ORIGINS', { infer: true });
+  const trustProxy = config.get('TRUST_PROXY', { infer: true });
+
+  // When behind a load balancer, trust X-Forwarded-* so req.ip and RBAC audit IPs
+  // reflect the real client. Local dev defaults to false (direct connections).
+  app.set('trust proxy', trustProxy);
 
   app.use(helmet());
   app.enableCors({

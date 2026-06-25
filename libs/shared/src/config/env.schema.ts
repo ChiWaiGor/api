@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseTrustProxy } from './trust-proxy.util';
 
 export const envSchema = z
   .object({
@@ -32,6 +33,24 @@ export const envSchema = z
         .map((o) => o.trim())
         .filter(Boolean),
     ),
+    // Express trust proxy: false (local/direct), hop count (e.g. 1 behind one LB),
+    // or comma-separated trusted proxy CIDRs/IPs (e.g. 10.0.0.0/8,172.16.0.0/12).
+    TRUST_PROXY: z
+      .string()
+      .optional()
+      .default('false')
+      .transform((v, ctx) => {
+        try {
+          return parseTrustProxy(v);
+        } catch (error) {
+          ctx.addIssue({
+            code: 'custom',
+            message:
+              error instanceof Error ? error.message : 'Invalid TRUST_PROXY',
+          });
+          return z.NEVER;
+        }
+      }),
     THROTTLE_TTL: z.coerce.number().int().positive(),
     THROTTLE_LIMIT: z.coerce.number().int().positive(),
     THROTTLE_AUTH_TTL: z.coerce.number().int().positive().default(60000),
