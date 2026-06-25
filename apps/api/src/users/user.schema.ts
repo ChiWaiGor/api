@@ -5,9 +5,10 @@ import {
   emailSchema,
   paginationQuerySchema,
   passwordSchema,
+  requestObject,
 } from '../common/schemas/primitives.schema';
 
-export const userParamsSchema = z.object({
+export const userParamsSchema = requestObject({
   id: cuidSchema,
 });
 
@@ -15,13 +16,13 @@ export const listUsersQuerySchema = paginationQuerySchema.extend({
   search: z.string().optional(),
 });
 
-export const createUserBodySchema = z.object({
+export const createUserBodySchema = requestObject({
   email: emailSchema,
   password: passwordSchema,
   roleNames: z.array(z.string().min(1)).optional(),
 });
 
-export const updateUserBodySchema = z.object({
+export const updateUserBodySchema = requestObject({
   email: emailSchema.optional(),
   password: passwordSchema.optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'LOCKED']).optional(),

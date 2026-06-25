@@ -3,41 +3,42 @@ import { z } from 'zod';
 import {
   emailSchema,
   passwordSchema,
+  requestObject,
 } from '../common/schemas/primitives.schema';
 
-export const registerBodySchema = z.object({
+export const registerBodySchema = requestObject({
   email: emailSchema,
   password: passwordSchema,
 });
 
-export const loginBodySchema = z.object({
+export const loginBodySchema = requestObject({
   email: emailSchema,
   password: z.string().min(1, 'Password is required'),
 });
 
-export const refreshBodySchema = z.object({
+export const refreshBodySchema = requestObject({
   refreshToken: z.string().min(1, 'Refresh token is required'),
 });
 
-export const logoutBodySchema = z.object({
+export const logoutBodySchema = requestObject({
   refreshToken: z.string().min(1, 'Refresh token is required'),
 });
 
-export const passwordResetRequestSchema = z.object({
+export const passwordResetRequestSchema = requestObject({
   email: emailSchema,
 });
 
-export const passwordResetConfirmSchema = z.object({
+export const passwordResetConfirmSchema = requestObject({
   token: z.string().min(1, 'Token is required'),
   newPassword: passwordSchema,
 });
 
-export const changePasswordSchema = z.object({
+export const changePasswordSchema = requestObject({
   currentPassword: z.string().min(1, 'Current password is required'),
   newPassword: passwordSchema,
 });
 
-export const emailVerificationConfirmSchema = z.object({
+export const emailVerificationConfirmSchema = requestObject({
   token: z.string().min(1, 'Token is required'),
 });
 

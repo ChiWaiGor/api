@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { createZodValidationPipe } from 'nestjs-zod';
+import { StrictZodValidationPipe } from './common/pipes/strict-zod-validation.pipe';
 import { LoggerModule } from 'nestjs-pino';
 import { MailQueueModule, QueueModule } from '@app/queue';
 import {
@@ -27,11 +27,6 @@ import { HealthModule } from './health/health.module';
 import { HttpMetricsInterceptor } from './observability/http-metrics.interceptor';
 import { RbacModule } from './rbac/rbac.module';
 import { UsersModule } from './users/users.module';
-
-const ZodValidationPipe = createZodValidationPipe({
-  strictSchemaDeclaration: false,
-});
-
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -105,7 +100,7 @@ const ZodValidationPipe = createZodValidationPipe({
     RbacModule,
   ],
   providers: [
-    { provide: APP_PIPE, useClass: ZodValidationPipe },
+    { provide: APP_PIPE, useClass: StrictZodValidationPipe },
     { provide: APP_INTERCEPTOR, useClass: HttpMetricsInterceptor },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
