@@ -1,16 +1,16 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
-import { cuidSchema } from '../common/schemas/primitives.schema';
+import { cuidSchema, requestObject } from '../common/schemas/primitives.schema';
 
-export const roleParamsSchema = z.object({
+export const roleParamsSchema = requestObject({
   id: cuidSchema,
 });
 
-export const permissionParamsSchema = z.object({
+export const permissionParamsSchema = requestObject({
   id: cuidSchema,
 });
 
-export const createRoleBodySchema = z.object({
+export const createRoleBodySchema = requestObject({
   name: z
     .string()
     .min(2)
@@ -19,17 +19,17 @@ export const createRoleBodySchema = z.object({
   description: z.string().max(255).optional(),
 });
 
-export const updateRoleBodySchema = z.object({
+export const updateRoleBodySchema = requestObject({
   name: createRoleBodySchema.shape.name.optional(),
   description: z.string().max(255).optional(),
 });
 
-export const assignRoleBodySchema = z.object({
+export const assignRoleBodySchema = requestObject({
   userId: cuidSchema,
   roleId: cuidSchema,
 });
 
-export const attachPermissionBodySchema = z.object({
+export const attachPermissionBodySchema = requestObject({
   roleId: cuidSchema,
   permissionId: cuidSchema,
 });

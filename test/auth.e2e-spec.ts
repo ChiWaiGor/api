@@ -100,6 +100,17 @@ describe('Auth (e2e)', () => {
       .expect(400);
   });
 
+  it('rejects unknown fields on register', async () => {
+    await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({
+        email: `${uniqueName('extra')}@example.com`,
+        password: 'SecurePass1',
+        isAdmin: true,
+      })
+      .expect(400);
+  });
+
   it('rejects reused refresh token after rotation', async () => {
     const email = `${uniqueName('refresh')}@example.com`;
     const password = 'SecurePass1';
