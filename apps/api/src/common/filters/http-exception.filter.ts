@@ -3,11 +3,18 @@ import {
   Catch,
   ExceptionFilter,
   HttpException,
-  HttpStatus,
 } from '@nestjs/common';
 import { Response, type Request } from 'express';
 import { captureSentryException } from '@app/shared';
 import type { JwtPayload } from '../../auth/types/jwt-payload.type';
+import {
+  buildApiErrorBody,
+  getRequestId,
+  getRequestPath,
+  isOperationalExemptPath,
+  parseHttpExceptionResponse,
+  statusToErrorCode,
+} from './api-error.util';
 
 type RequestWithUser = Request & {
   user?: JwtPayload;
@@ -20,29 +27,43 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<RequestWithUser>();
     const statusCode = exception.getStatus();
-    if (statusCode >= 500) {
+    const path = getRequestPath(request);
+    const requestId = getRequestId(request);
+    const exempt = isOperationalExemptPath(path);
+
+    if (statusCode >= 500 && !exempt) {
       captureSentryException(exception, {
-        requestId: request.headers?.['x-request-id'] as string | undefined,
+        requestId,
         userId: request.user?.sub,
-        path: request.url,
+        path,
         method: request.method,
       });
     }
 
     const exceptionResponse = exception.getResponse();
 
-    const message =
-      typeof exceptionResponse === 'string'
-        ? exceptionResponse
-        : ((exceptionResponse as { message?: string | string[] }).message ??
-          'Error');
+    if (exempt) {
+      response
+        .status(statusCode)
+        .json(
+          typeof exceptionResponse === 'string'
+            ? { message: exceptionResponse }
+            : exceptionResponse,
+        );
+      return;
+    }
 
-    response.status(statusCode).json({
-      statusCode,
-      message,
-      error: HttpStatus[statusCode] ?? 'Error',
-      timestamp: new Date().toISOString(),
-      path: request.url,
-    });
+    const { message, details } = parseHttpExceptionResponse(exceptionResponse);
+
+    response.status(statusCode).json(
+      buildApiErrorBody({
+        statusCode,
+        code: statusToErrorCode(statusCode),
+        message,
+        path,
+        details,
+        requestId,
+      }),
+    );
   }
 }
