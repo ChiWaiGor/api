@@ -10,6 +10,12 @@ import { Response, type Request } from 'express';
 import { ZodValidationException } from 'nestjs-zod';
 import { Env, captureSentryException } from '@app/shared';
 import type { JwtPayload } from '../../auth/types/jwt-payload.type';
+import {
+  API_ERROR_CODES,
+  buildApiErrorBody,
+  getRequestId,
+  getRequestPath,
+} from './api-error.util';
 import { HttpExceptionFilter } from './http-exception.filter';
 import { ZodValidationExceptionFilter } from './zod-validation-exception.filter';
 
@@ -37,11 +43,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<RequestWithUser>();
+    const path = getRequestPath(request);
+    const requestId = getRequestId(request);
 
     captureSentryException(exception, {
-      requestId: request.headers?.['x-request-id'] as string | undefined,
+      requestId,
       userId: request.user?.sub,
-      path: request.url,
+      path,
       method: request.method,
     });
 
@@ -52,12 +60,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? 'Internal server error'
         : exception.message;
 
-    response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-      message,
-      error: 'Internal Server Error',
-      timestamp: new Date().toISOString(),
-      path: request.url,
-    });
+    response.status(HttpStatus.INTERNAL_SERVER_ERROR).json(
+      buildApiErrorBody({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        code: API_ERROR_CODES.INTERNAL_ERROR,
+        message,
+        path,
+        requestId,
+      }),
+    );
   }
 }

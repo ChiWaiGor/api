@@ -1,6 +1,7 @@
 import { ArgumentsHost, BadRequestException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Env, captureSentryException } from '@app/shared';
+import { API_ERROR_CODES } from './api-error.util';
 import { AllExceptionsFilter } from './all-exceptions.filter';
 
 jest.mock('@app/shared', () => ({
@@ -56,8 +57,10 @@ describe('AllExceptionsFilter', () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        code: API_ERROR_CODES.INTERNAL_ERROR,
         message: 'Database exploded',
         path: '/users',
+        requestId: 'req-123',
       }),
     );
   });
@@ -71,6 +74,7 @@ describe('AllExceptionsFilter', () => {
 
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
+        code: API_ERROR_CODES.INTERNAL_ERROR,
         message: 'Internal server error',
       }),
     );
@@ -88,6 +92,7 @@ describe('AllExceptionsFilter', () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         statusCode: HttpStatus.BAD_REQUEST,
+        code: API_ERROR_CODES.BAD_REQUEST,
         message: 'Bad input',
         path: '/bad',
       }),
