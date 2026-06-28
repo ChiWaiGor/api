@@ -16,6 +16,7 @@ import {
 } from '@app/shared';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { AuthModule } from './auth/auth.module';
+import { CsrfGuard } from './auth/guards/csrf.guard';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ZodValidationExceptionFilter } from './common/filters/zod-validation-exception.filter';
@@ -104,6 +105,7 @@ import { UsersModule } from './users/users.module';
     { provide: APP_INTERCEPTOR, useClass: HttpMetricsInterceptor },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useExisting: CsrfGuard },
     { provide: APP_GUARD, useClass: EmailVerifiedGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

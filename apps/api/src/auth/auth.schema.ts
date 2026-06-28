@@ -16,12 +16,12 @@ export const loginBodySchema = requestObject({
   password: z.string().min(1, 'Password is required'),
 });
 
-export const refreshBodySchema = requestObject({
-  refreshToken: z.string().min(1, 'Refresh token is required'),
+export const refreshBodyDtoSchema = requestObject({
+  refreshToken: z.string().min(1, 'Refresh token is required').optional(),
 });
 
-export const logoutBodySchema = requestObject({
-  refreshToken: z.string().min(1, 'Refresh token is required'),
+export const logoutBodyDtoSchema = requestObject({
+  refreshToken: z.string().min(1, 'Refresh token is required').optional(),
 });
 
 export const passwordResetRequestSchema = requestObject({
@@ -47,8 +47,8 @@ export const successResponseSchema = z.object({
 });
 
 export const authTokensResponseSchema = z.object({
-  accessToken: z.string(),
-  refreshToken: z.string(),
+  accessToken: z.string().optional(),
+  refreshToken: z.string().optional(),
 });
 
 export const authMeResponseSchema = z.object({
@@ -62,8 +62,8 @@ export const authMeResponseSchema = z.object({
 
 export type RegisterBody = z.infer<typeof registerBodySchema>;
 export type LoginBody = z.infer<typeof loginBodySchema>;
-export type RefreshBody = z.infer<typeof refreshBodySchema>;
-export type LogoutBody = z.infer<typeof logoutBodySchema>;
+export type RefreshBody = { refreshToken: string };
+export type LogoutBody = { refreshToken: string };
 export type PasswordResetRequestBody = z.infer<
   typeof passwordResetRequestSchema
 >;
@@ -77,8 +77,8 @@ export type EmailVerificationConfirmBody = z.infer<
 
 export class RegisterBodyDto extends createZodDto(registerBodySchema) {}
 export class LoginBodyDto extends createZodDto(loginBodySchema) {}
-export class RefreshBodyDto extends createZodDto(refreshBodySchema) {}
-export class LogoutBodyDto extends createZodDto(logoutBodySchema) {}
+export class RefreshBodyDto extends createZodDto(refreshBodyDtoSchema) {}
+export class LogoutBodyDto extends createZodDto(logoutBodyDtoSchema) {}
 export class PasswordResetRequestDto extends createZodDto(
   passwordResetRequestSchema,
 ) {}

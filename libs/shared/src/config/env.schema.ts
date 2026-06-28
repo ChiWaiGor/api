@@ -162,7 +162,33 @@ export const envSchema = z
       .default('false')
       .transform((v) => v === 'true' || v === '1'),
     METRICS_PORT: z.coerce.number().int().positive().default(9464),
+    // Browser (web) auth cookies. Mobile/native clients use Bearer tokens instead.
+    // AUTH_COOKIE_SECURE defaults to true in production (requires HTTPS).
+    AUTH_COOKIE_SECURE: z
+      .string()
+      .optional()
+      .transform((v) => {
+        if (v === undefined || v === '') {
+          return undefined;
+        }
+        return v === 'true' || v === '1';
+      }),
+    AUTH_COOKIE_SAME_SITE: z
+      .enum(['strict', 'lax', 'none'])
+      .optional()
+      .default('lax'),
+    AUTH_COOKIE_DOMAIN: z
+      .string()
+      .optional()
+      .transform((v) => {
+        const trimmed = v?.trim();
+        return trimmed ? trimmed : undefined;
+      }),
   })
+  .transform((env) => ({
+    ...env,
+    AUTH_COOKIE_SECURE: env.AUTH_COOKIE_SECURE ?? env.NODE_ENV === 'production',
+  }))
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'production') {
       return;
