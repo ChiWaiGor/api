@@ -4,6 +4,7 @@ import { App } from 'supertest/types';
 import { MailQueueService } from '@app/queue';
 import { PrismaService } from '@app/shared';
 import {
+  API_V1,
   createE2eApp,
   extractPasswordResetTokenFromMail,
   extractVerificationTokenFromMail,
@@ -29,7 +30,7 @@ describe('Auth (e2e)', () => {
     const password = 'SecurePass1';
 
     const registerRes = await request(app.getHttpServer())
-      .post('/auth/register')
+      .post(`${API_V1}/auth/register`)
       .send({ email, password })
       .expect(201);
 
@@ -37,14 +38,14 @@ describe('Auth (e2e)', () => {
     expect(registerRes.body.refreshToken).toBeDefined();
 
     const loginRes = await request(app.getHttpServer())
-      .post('/auth/login')
+      .post(`${API_V1}/auth/login`)
       .send({ email, password })
       .expect(201);
 
     const { accessToken, refreshToken } = loginRes.body;
 
     await request(app.getHttpServer())
-      .get('/auth/me')
+      .get(`${API_V1}/auth/me`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200)
       .expect((res) => {
@@ -53,7 +54,7 @@ describe('Auth (e2e)', () => {
       });
 
     const refreshRes = await request(app.getHttpServer())
-      .post('/auth/refresh')
+      .post(`${API_V1}/auth/refresh`)
       .send({ refreshToken })
       .expect(201);
 
@@ -61,13 +62,13 @@ describe('Auth (e2e)', () => {
     const newRefresh = refreshRes.body.refreshToken as string;
 
     await request(app.getHttpServer())
-      .post('/auth/logout')
+      .post(`${API_V1}/auth/logout`)
       .set('Authorization', `Bearer ${newAccess}`)
       .send({ refreshToken: newRefresh })
       .expect(201);
 
     await request(app.getHttpServer())
-      .get('/auth/me')
+      .get(`${API_V1}/auth/me`)
       .set('Authorization', `Bearer ${newAccess}`)
       .expect(401);
   });
@@ -77,33 +78,33 @@ describe('Auth (e2e)', () => {
     const password = 'SecurePass1';
 
     await request(app.getHttpServer())
-      .post('/auth/register')
+      .post(`${API_V1}/auth/register`)
       .send({ email, password })
       .expect(201);
 
     await request(app.getHttpServer())
-      .post('/auth/register')
+      .post(`${API_V1}/auth/register`)
       .send({ email, password })
       .expect(409);
   });
 
   it('rejects invalid login credentials', async () => {
     await request(app.getHttpServer())
-      .post('/auth/login')
+      .post(`${API_V1}/auth/login`)
       .send({ email: 'nobody@example.com', password: 'SecurePass1' })
       .expect(401);
   });
 
   it('rejects weak passwords on register', async () => {
     await request(app.getHttpServer())
-      .post('/auth/register')
+      .post(`${API_V1}/auth/register`)
       .send({ email: `${uniqueName('weak')}@example.com`, password: 'short' })
       .expect(400);
   });
 
   it('rejects unknown fields on register', async () => {
     await request(app.getHttpServer())
-      .post('/auth/register')
+      .post(`${API_V1}/auth/register`)
       .send({
         email: `${uniqueName('extra')}@example.com`,
         password: 'SecurePass1',
@@ -117,30 +118,30 @@ describe('Auth (e2e)', () => {
     const password = 'SecurePass1';
 
     await request(app.getHttpServer())
-      .post('/auth/register')
+      .post(`${API_V1}/auth/register`)
       .send({ email, password })
       .expect(201);
 
     const loginRes = await request(app.getHttpServer())
-      .post('/auth/login')
+      .post(`${API_V1}/auth/login`)
       .send({ email, password })
       .expect(201);
 
     const oldRefresh = loginRes.body.refreshToken as string;
 
     await request(app.getHttpServer())
-      .post('/auth/refresh')
+      .post(`${API_V1}/auth/refresh`)
       .send({ refreshToken: oldRefresh })
       .expect(201);
 
     await request(app.getHttpServer())
-      .post('/auth/refresh')
+      .post(`${API_V1}/auth/refresh`)
       .send({ refreshToken: oldRefresh })
       .expect(401);
   });
 
   it('rejects unauthenticated access to /auth/me', async () => {
-    await request(app.getHttpServer()).get('/auth/me').expect(401);
+    await request(app.getHttpServer()).get(`${API_V1}/auth/me`).expect(401);
   });
 
   it('grants domain API access after register and email verification confirm', async () => {
@@ -150,14 +151,14 @@ describe('Auth (e2e)', () => {
     const password = 'SecurePass1';
 
     const registerRes = await request(app.getHttpServer())
-      .post('/auth/register')
+      .post(`${API_V1}/auth/register`)
       .send({ email, password })
       .expect(201);
 
     const { accessToken } = registerRes.body;
 
     await request(app.getHttpServer())
-      .get('/users?page=1&limit=5')
+      .get(`${API_V1}/users?page=1&limit=5`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(403)
       .expect((res) => {
@@ -172,14 +173,14 @@ describe('Auth (e2e)', () => {
     const token = extractVerificationTokenFromMail(verificationCall![0].text);
 
     await request(app.getHttpServer())
-      .post('/auth/email-verification/confirm')
+      .post(`${API_V1}/auth/email-verification/confirm`)
       .send({ token })
       .expect(200);
 
     enqueueSpy.mockRestore();
 
     await request(app.getHttpServer())
-      .get('/users?page=1&limit=5')
+      .get(`${API_V1}/users?page=1&limit=5`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200)
       .expect((res) => {
@@ -192,12 +193,12 @@ describe('Auth (e2e)', () => {
     const password = 'SecurePass1';
 
     const registerRes = await request(app.getHttpServer())
-      .post('/auth/register')
+      .post(`${API_V1}/auth/register`)
       .send({ email, password })
       .expect(201);
 
     await request(app.getHttpServer())
-      .post('/auth/change-password')
+      .post(`${API_V1}/auth/change-password`)
       .set('Authorization', `Bearer ${registerRes.body.accessToken}`)
       .send({ currentPassword: password, newPassword: 'NewSecure2' })
       .expect(403)
@@ -212,7 +213,7 @@ describe('Auth (e2e)', () => {
     const newPassword = 'NewSecure2';
 
     await request(app.getHttpServer())
-      .post('/auth/change-password')
+      .post(`${API_V1}/auth/change-password`)
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ currentPassword: 'WrongPass1', newPassword })
       .expect(401)
@@ -221,23 +222,23 @@ describe('Auth (e2e)', () => {
       });
 
     await request(app.getHttpServer())
-      .post('/auth/change-password')
+      .post(`${API_V1}/auth/change-password`)
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ currentPassword: password, newPassword })
       .expect(200);
 
     await request(app.getHttpServer())
-      .post('/auth/login')
+      .post(`${API_V1}/auth/login`)
       .send({ email, password })
       .expect(401);
 
     await request(app.getHttpServer())
-      .post('/auth/refresh')
+      .post(`${API_V1}/auth/refresh`)
       .send({ refreshToken })
       .expect(401);
 
     await request(app.getHttpServer())
-      .post('/auth/login')
+      .post(`${API_V1}/auth/login`)
       .send({ email, password: newPassword })
       .expect(201);
   });
@@ -247,14 +248,14 @@ describe('Auth (e2e)', () => {
     const password = 'SecurePass1';
 
     const registerRes = await request(app.getHttpServer())
-      .post('/auth/register')
+      .post(`${API_V1}/auth/register`)
       .send({ email, password })
       .expect(201);
 
     const { accessToken } = registerRes.body;
 
     await request(app.getHttpServer())
-      .get('/auth/me')
+      .get(`${API_V1}/auth/me`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200)
       .expect((res) => {
@@ -262,12 +263,12 @@ describe('Auth (e2e)', () => {
       });
 
     await request(app.getHttpServer())
-      .post('/auth/email-verification/request')
+      .post(`${API_V1}/auth/email-verification/request`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
 
     await request(app.getHttpServer())
-      .get('/users?page=1&limit=5')
+      .get(`${API_V1}/users?page=1&limit=5`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(403)
       .expect((res) => {
@@ -282,7 +283,7 @@ describe('Auth (e2e)', () => {
     const enqueueSpy = jest.spyOn(mailQueue, 'enqueueSend');
 
     await request(app.getHttpServer())
-      .post('/auth/password-reset/request')
+      .post(`${API_V1}/auth/password-reset/request`)
       .send({ email })
       .expect(200);
 
@@ -295,17 +296,17 @@ describe('Auth (e2e)', () => {
     enqueueSpy.mockRestore();
 
     await request(app.getHttpServer())
-      .post('/auth/password-reset/confirm')
+      .post(`${API_V1}/auth/password-reset/confirm`)
       .send({ token, newPassword })
       .expect(200);
 
     await request(app.getHttpServer())
-      .post('/auth/login')
+      .post(`${API_V1}/auth/login`)
       .send({ email, password })
       .expect(401);
 
     await request(app.getHttpServer())
-      .post('/auth/login')
+      .post(`${API_V1}/auth/login`)
       .send({ email, password: newPassword })
       .expect(201);
   });
@@ -320,7 +321,7 @@ describe('Auth (e2e)', () => {
 
     for (let i = 0; i < maxAttempts; i += 1) {
       await request(app.getHttpServer())
-        .post('/auth/login')
+        .post(`${API_V1}/auth/login`)
         .send({ email, password: 'WrongPass1' })
         .expect(401);
     }
@@ -329,7 +330,7 @@ describe('Auth (e2e)', () => {
     expect(user?.status).toBe('LOCKED');
 
     await request(app.getHttpServer())
-      .post('/auth/login')
+      .post(`${API_V1}/auth/login`)
       .send({ email, password })
       .expect(401)
       .expect((res) => {
@@ -344,7 +345,7 @@ describe('Auth (e2e)', () => {
       const agent = request.agent(app.getHttpServer());
 
       await agent
-        .post('/auth/register')
+        .post(`${API_V1}/auth/register`)
         .set('X-Auth-Client', 'web')
         .send({ email, password })
         .expect(201)
@@ -355,7 +356,7 @@ describe('Auth (e2e)', () => {
         });
 
       await agent
-        .get('/auth/me')
+        .get(`${API_V1}/auth/me`)
         .expect(200)
         .expect((res) => {
           expect(res.body.email).toBe(email);
@@ -368,13 +369,13 @@ describe('Auth (e2e)', () => {
       const agent = request.agent(app.getHttpServer());
 
       await agent
-        .post('/auth/register')
+        .post(`${API_V1}/auth/register`)
         .set('X-Auth-Client', 'web')
         .send({ email, password })
         .expect(201);
 
       const loginRes = await agent
-        .post('/auth/login')
+        .post(`${API_V1}/auth/login`)
         .set('X-Auth-Client', 'web')
         .send({ email, password })
         .expect(201);
@@ -385,13 +386,13 @@ describe('Auth (e2e)', () => {
       expect(csrf).toBeDefined();
 
       await agent
-        .post('/auth/refresh')
+        .post(`${API_V1}/auth/refresh`)
         .set('X-Auth-Client', 'web')
         .send({})
         .expect(403);
 
       const refreshRes = await agent
-        .post('/auth/refresh')
+        .post(`${API_V1}/auth/refresh`)
         .set('X-Auth-Client', 'web')
         .set('X-CSRF-Token', csrf)
         .send({})
@@ -402,12 +403,12 @@ describe('Auth (e2e)', () => {
       ).csrf_token;
 
       await agent
-        .post('/auth/logout')
+        .post(`${API_V1}/auth/logout`)
         .set('X-CSRF-Token', refreshCsrf)
         .send({})
         .expect(201);
 
-      await agent.get('/auth/me').expect(401);
+      await agent.get(`${API_V1}/auth/me`).expect(401);
     });
 
     it('still returns bearer tokens for mobile clients (default)', async () => {
@@ -415,7 +416,7 @@ describe('Auth (e2e)', () => {
       const password = 'SecurePass1';
 
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post(`${API_V1}/auth/register`)
         .send({ email, password })
         .expect(201)
         .expect((res) => {

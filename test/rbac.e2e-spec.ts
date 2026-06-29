@@ -4,6 +4,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { PrismaService } from '@app/shared';
 import {
+  API_V1,
   createE2eApp,
   loginAdmin,
   registerAndVerifyUser,
@@ -46,7 +47,7 @@ describe('RBAC (e2e)', () => {
   describe('read access', () => {
     it('admin can list roles after seed login', async () => {
       await request(app.getHttpServer())
-        .get('/roles')
+        .get(`${API_V1}/roles`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200)
         .expect((res) => {
@@ -60,7 +61,7 @@ describe('RBAC (e2e)', () => {
     it('non-admin cannot list roles', async () => {
       const { accessToken } = await registerAndVerifyUser(app, 'norole');
       await request(app.getHttpServer())
-        .get('/roles')
+        .get(`${API_V1}/roles`)
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(403)
         .expect((res) => {
@@ -76,7 +77,7 @@ describe('RBAC (e2e)', () => {
 
     beforeAll(async () => {
       const permissionsRes = await request(app.getHttpServer())
-        .get('/permissions')
+        .get(`${API_V1}/permissions`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
@@ -91,7 +92,7 @@ describe('RBAC (e2e)', () => {
 
     it('admin can list permissions', async () => {
       await request(app.getHttpServer())
-        .get('/permissions')
+        .get(`${API_V1}/permissions`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200)
         .expect((res) => {
@@ -106,7 +107,7 @@ describe('RBAC (e2e)', () => {
       const roleName = uniqueName('editor');
 
       const res = await request(app.getHttpServer())
-        .post('/roles')
+        .post(`${API_V1}/roles`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ name: roleName, description: 'Test editor role' })
         .expect(201);
@@ -124,7 +125,7 @@ describe('RBAC (e2e)', () => {
       const updatedName = uniqueName('editor-upd');
 
       const res = await request(app.getHttpServer())
-        .patch(`/roles/${customRoleId}`)
+        .patch(`${API_V1}/roles/${customRoleId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ name: updatedName, description: 'Updated description' })
         .expect(200);
@@ -138,7 +139,7 @@ describe('RBAC (e2e)', () => {
 
     it('attaches a permission to a custom role', async () => {
       await request(app.getHttpServer())
-        .post('/roles/permissions/attach')
+        .post(`${API_V1}/roles/permissions/attach`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ roleId: customRoleId, permissionId: usersWritePermissionId })
         .expect(201);
@@ -151,12 +152,12 @@ describe('RBAC (e2e)', () => {
 
     it('assigns a role and reflects permissions on /auth/me', async () => {
       const beforeLoginRes = await request(app.getHttpServer())
-        .post('/auth/login')
+        .post(`${API_V1}/auth/login`)
         .send({ email: testUser.email, password: testUser.password })
         .expect(201);
 
       await request(app.getHttpServer())
-        .get('/auth/me')
+        .get(`${API_V1}/auth/me`)
         .set('Authorization', `Bearer ${beforeLoginRes.body.accessToken}`)
         .expect(200)
         .expect((res) => {
@@ -165,7 +166,7 @@ describe('RBAC (e2e)', () => {
         });
 
       await request(app.getHttpServer())
-        .post('/roles/assign')
+        .post(`${API_V1}/roles/assign`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ userId: testUser.userId, roleId: customRoleId })
         .expect(201);
@@ -176,12 +177,12 @@ describe('RBAC (e2e)', () => {
       });
 
       const loginRes = await request(app.getHttpServer())
-        .post('/auth/login')
+        .post(`${API_V1}/auth/login`)
         .send({ email: testUser.email, password: testUser.password })
         .expect(201);
 
       await request(app.getHttpServer())
-        .get('/auth/me')
+        .get(`${API_V1}/auth/me`)
         .set('Authorization', `Bearer ${loginRes.body.accessToken}`)
         .expect(200)
         .expect((res) => {
@@ -192,7 +193,7 @@ describe('RBAC (e2e)', () => {
 
     it('detaches a permission from a custom role', async () => {
       await request(app.getHttpServer())
-        .post('/roles/permissions/detach')
+        .post(`${API_V1}/roles/permissions/detach`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ roleId: customRoleId, permissionId: usersWritePermissionId })
         .expect(201);
@@ -205,7 +206,7 @@ describe('RBAC (e2e)', () => {
 
     it('unassigns a role from a user', async () => {
       await request(app.getHttpServer())
-        .post('/roles/unassign')
+        .post(`${API_V1}/roles/unassign`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ userId: testUser.userId, roleId: customRoleId })
         .expect(201);
@@ -218,7 +219,7 @@ describe('RBAC (e2e)', () => {
 
     it('deletes an empty custom role', async () => {
       await request(app.getHttpServer())
-        .delete(`/roles/${customRoleId}`)
+        .delete(`${API_V1}/roles/${customRoleId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
@@ -229,7 +230,7 @@ describe('RBAC (e2e)', () => {
 
     it('rejects PATCH and DELETE on system admin role', async () => {
       const rolesRes = await request(app.getHttpServer())
-        .get('/roles')
+        .get(`${API_V1}/roles`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
@@ -239,20 +240,20 @@ describe('RBAC (e2e)', () => {
       expect(adminRole).toBeDefined();
 
       await request(app.getHttpServer())
-        .patch(`/roles/${adminRole.id}`)
+        .patch(`${API_V1}/roles/${adminRole.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ description: 'Hacked' })
         .expect(403);
 
       await request(app.getHttpServer())
-        .delete(`/roles/${adminRole.id}`)
+        .delete(`${API_V1}/roles/${adminRole.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(403);
     });
 
     it('rejects unassigning the last admin assignment', async () => {
       const rolesRes = await request(app.getHttpServer())
-        .get('/roles')
+        .get(`${API_V1}/roles`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
@@ -265,7 +266,7 @@ describe('RBAC (e2e)', () => {
       expect(adminUser).toBeDefined();
 
       await request(app.getHttpServer())
-        .post('/roles/unassign')
+        .post(`${API_V1}/roles/unassign`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ userId: adminUser!.id, roleId: adminRole.id })
         .expect(400)
@@ -280,7 +281,7 @@ describe('RBAC (e2e)', () => {
       const { accessToken } = await registerAndVerifyUser(app, 'nonadmin');
 
       await request(app.getHttpServer())
-        .post('/roles')
+        .post(`${API_V1}/roles`)
         .set('Authorization', `Bearer ${accessToken}`)
         .send({ name: uniqueName('forbidden'), description: 'nope' })
         .expect(403)
@@ -289,7 +290,7 @@ describe('RBAC (e2e)', () => {
         });
 
       await request(app.getHttpServer())
-        .get('/permissions')
+        .get(`${API_V1}/permissions`)
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(403)
         .expect((res) => {
@@ -297,7 +298,7 @@ describe('RBAC (e2e)', () => {
         });
 
       const rolesRes = await request(app.getHttpServer())
-        .get('/roles')
+        .get(`${API_V1}/roles`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
       const adminRole = rolesRes.body.find(
@@ -305,7 +306,7 @@ describe('RBAC (e2e)', () => {
       );
 
       await request(app.getHttpServer())
-        .patch(`/roles/${adminRole.id}`)
+        .patch(`${API_V1}/roles/${adminRole.id}`)
         .set('Authorization', `Bearer ${accessToken}`)
         .send({ description: 'nope' })
         .expect(403)
@@ -314,7 +315,7 @@ describe('RBAC (e2e)', () => {
         });
 
       await request(app.getHttpServer())
-        .post('/roles/assign')
+        .post(`${API_V1}/roles/assign`)
         .set('Authorization', `Bearer ${accessToken}`)
         .send({ userId: 'fake', roleId: adminRole.id })
         .expect(403)

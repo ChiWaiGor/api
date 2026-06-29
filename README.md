@@ -67,7 +67,7 @@ SMTP_PORT=1025
 SMTP_SECURE=false
 ```
 
-Trigger a mail flow (e.g. `POST /auth/password-reset/request`), then open
+Trigger a mail flow (e.g. `POST /api/v1/auth/password-reset/request`), then open
 [http://localhost:8025](http://localhost:8025) to read the message.
 
 The same SMTP adapter works in production with your provider's host, port,
@@ -115,21 +115,21 @@ host, port, and password.
 
 ```bash
 # Login
-curl -s -X POST http://localhost:3000/auth/login \
+curl -s -X POST http://localhost:3000/api/v1/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"admin@example.com","password":"Admin123!@#"}'
 
 # Use accessToken from response
-curl -s http://localhost:3000/auth/me \
+curl -s http://localhost:3000/api/v1/auth/me \
   -H "Authorization: Bearer <accessToken>"
 
 # Refresh
-curl -s -X POST http://localhost:3000/auth/refresh \
+curl -s -X POST http://localhost:3000/api/v1/auth/refresh \
   -H 'Content-Type: application/json' \
   -d '{"refreshToken":"<refreshToken>"}'
 
 # Logout
-curl -s -X POST http://localhost:3000/auth/logout \
+curl -s -X POST http://localhost:3000/api/v1/auth/logout \
   -H "Authorization: Bearer <accessToken>" \
   -H 'Content-Type: application/json' \
   -d '{"refreshToken":"<refreshToken>"}'
@@ -207,11 +207,11 @@ coverage gates apply locally before push.
 
 ## API overview
 
-| Module | Routes                                                                                                                                                                                                     |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth   | `POST /auth/register`, `login`, `refresh`, `logout`; `GET /auth/me`                                                                                                                                        |
-| Users  | `GET/POST /users`, `GET/PATCH/DELETE /users/:id`                                                                                                                                                           |
-| RBAC   | `GET /roles`, `GET /permissions`, `POST /roles`, `PATCH /roles/:id`, `DELETE /roles/:id`, `POST /roles/assign`, `POST /roles/unassign`, `POST /roles/permissions/attach`, `POST /roles/permissions/detach` |
+| Module | Routes                                                                                                                                                                                                                                                                    |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth   | `POST /api/v1/auth/register`, `login`, `refresh`, `logout`; `GET /api/v1/auth/me`                                                                                                                                                                                         |
+| Users  | `GET/POST /api/v1/users`, `GET/PATCH/DELETE /api/v1/users/:id`                                                                                                                                                                                                            |
+| RBAC   | `GET /api/v1/roles`, `GET /api/v1/permissions`, `POST /api/v1/roles`, `PATCH /api/v1/roles/:id`, `DELETE /api/v1/roles/:id`, `POST /api/v1/roles/assign`, `POST /api/v1/roles/unassign`, `POST /api/v1/roles/permissions/attach`, `POST /api/v1/roles/permissions/detach` |
 
 Permissions are defined in code (`apps/api/src/rbac/permissions.constants.ts`) and synced via seed. They include `users:read`, `users:write`, `users:delete`, `roles:read`, `roles:manage`, `permissions:read`, and `permissions:manage` (the last is catalog-only; there is no runtime permission API).
 
@@ -223,11 +223,11 @@ Mutations (create/update/delete roles, assign/unassign, attach/detach permission
 
 ## Rate limiting
 
-| Variable                                    | Default                  | Scope                                     |
-| ------------------------------------------- | ------------------------ | ----------------------------------------- |
-| `THROTTLE_TTL` / `THROTTLE_LIMIT`           | required                 | Global default for protected routes       |
-| `THROTTLE_AUTH_TTL` / `THROTTLE_AUTH_LIMIT` | 60000 ms / 10            | `POST /auth/register`, `POST /auth/login` |
-| (derived)                                   | 2× `THROTTLE_AUTH_LIMIT` | `POST /auth/refresh`                      |
+| Variable                                    | Default                  | Scope                                                   |
+| ------------------------------------------- | ------------------------ | ------------------------------------------------------- |
+| `THROTTLE_TTL` / `THROTTLE_LIMIT`           | required                 | Global default for protected routes                     |
+| `THROTTLE_AUTH_TTL` / `THROTTLE_AUTH_LIMIT` | 60000 ms / 10            | `POST /api/v1/auth/register`, `POST /api/v1/auth/login` |
+| (derived)                                   | 2× `THROTTLE_AUTH_LIMIT` | `POST /api/v1/auth/refresh`                             |
 
 Throttling counters are stored in **Redis** so limits are enforced consistently
 across multiple instances (the default in-memory store counts per process). If

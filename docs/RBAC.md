@@ -23,17 +23,17 @@ Reserved names (`admin`, `user`) cannot be used for new custom roles.
 
 All mutation routes require `roles:manage` (except read routes).
 
-| Method | Path                        | Permission                                   |
-| ------ | --------------------------- | -------------------------------------------- |
-| GET    | `/roles`                    | `roles:read`                                 |
-| GET    | `/permissions`              | `permissions:read`                           |
-| POST   | `/roles`                    | `roles:manage`                               |
-| PATCH  | `/roles/:id`                | `roles:manage` (non-system only)             |
-| DELETE | `/roles/:id`                | `roles:manage` (non-system, unassigned only) |
-| POST   | `/roles/assign`             | `roles:manage`                               |
-| POST   | `/roles/unassign`           | `roles:manage`                               |
-| POST   | `/roles/permissions/attach` | `roles:manage`                               |
-| POST   | `/roles/permissions/detach` | `roles:manage`                               |
+| Method | Path                               | Permission                                   |
+| ------ | ---------------------------------- | -------------------------------------------- |
+| GET    | `/api/v1/roles`                    | `roles:read`                                 |
+| GET    | `/api/v1/permissions`              | `permissions:read`                           |
+| POST   | `/api/v1/roles`                    | `roles:manage`                               |
+| PATCH  | `/api/v1/roles/:id`                | `roles:manage` (non-system only)             |
+| DELETE | `/api/v1/roles/:id`                | `roles:manage` (non-system, unassigned only) |
+| POST   | `/api/v1/roles/assign`             | `roles:manage`                               |
+| POST   | `/api/v1/roles/unassign`           | `roles:manage`                               |
+| POST   | `/api/v1/roles/permissions/attach` | `roles:manage`                               |
+| POST   | `/api/v1/roles/permissions/detach` | `roles:manage`                               |
 
 Runtime permission creation (`POST /permissions`) is **not** supported. Permissions are provisioned via seed/migration only.
 
