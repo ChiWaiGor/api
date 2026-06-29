@@ -1,9 +1,11 @@
 import { INestApplication } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { MailQueueService } from '@app/queue';
 import { PrismaService, RedisService } from '@app/shared';
+import { configureHttpApp } from '../apps/api/src/app-config';
 import { AppModule } from '../apps/api/src/app.module';
 
 export const adminCredentials = {
@@ -21,6 +23,25 @@ export type VerifiedUser = {
 
 export const uniqueName = (prefix: string): string =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+export const parseSetCookieHeader = (
+  setCookie: string | string[] | undefined,
+): Record<string, string> => {
+  const headers = Array.isArray(setCookie)
+    ? setCookie
+    : setCookie
+      ? [setCookie]
+      : [];
+  return Object.fromEntries(
+    headers.map((header) => {
+      const [pair] = header.split(';');
+      const eq = pair.indexOf('=');
+      const name = pair.slice(0, eq);
+      const value = pair.slice(eq + 1);
+      return [name, value];
+    }),
+  );
+};
 
 export const extractTokenFromMail = (text: string, path: string): string => {
   const match = text.match(
@@ -43,7 +64,8 @@ export async function createE2eApp(): Promise<INestApplication<App>> {
     imports: [AppModule],
   }).compile();
 
-  const app = moduleFixture.createNestApplication();
+  const app = moduleFixture.createNestApplication<NestExpressApplication>();
+  configureHttpApp(app);
   await app.init();
 
   const redis = app.get(RedisService);

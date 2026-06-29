@@ -5,8 +5,10 @@ import { PassportModule } from '@nestjs/passport';
 import { Env } from '@app/shared';
 import { RbacModule } from '../rbac/rbac.module';
 import { AuthController } from './auth.controller';
+import { AuthCookieService } from './auth-cookie.service';
 import { AuthCryptoService } from './auth-crypto.service';
 import { AuthService } from './auth.service';
+import { CsrfGuard } from './guards/csrf.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
@@ -25,7 +27,13 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     RbacModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, AuthCryptoService, JwtStrategy],
-  exports: [AuthService, AuthCryptoService],
+  providers: [
+    AuthService,
+    AuthCryptoService,
+    AuthCookieService,
+    CsrfGuard,
+    JwtStrategy,
+  ],
+  exports: [AuthService, AuthCryptoService, AuthCookieService, CsrfGuard],
 })
 export class AuthModule {}

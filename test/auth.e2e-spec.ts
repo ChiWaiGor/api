@@ -7,6 +7,7 @@ import {
   createE2eApp,
   extractPasswordResetTokenFromMail,
   extractVerificationTokenFromMail,
+  parseSetCookieHeader,
   registerAndVerifyUser,
   teardownE2eApp,
   uniqueName,
@@ -334,5 +335,93 @@ describe('Auth (e2e)', () => {
       .expect((res) => {
         expect(res.body.message).toContain('Account is locked');
       });
+  });
+
+  describe('web cookie auth (X-Auth-Client: web)', () => {
+    it('sets httpOnly cookies and omits tokens from the response body', async () => {
+      const email = `${uniqueName('web')}@example.com`;
+      const password = 'SecurePass1';
+      const agent = request.agent(app.getHttpServer());
+
+      await agent
+        .post('/auth/register')
+        .set('X-Auth-Client', 'web')
+        .send({ email, password })
+        .expect(201)
+        .expect((res) => {
+          expect(res.body.accessToken).toBeUndefined();
+          expect(res.body.refreshToken).toBeUndefined();
+          expect(res.headers['set-cookie']).toBeDefined();
+        });
+
+      await agent
+        .get('/auth/me')
+        .expect(200)
+        .expect((res) => {
+          expect(res.body.email).toBe(email);
+        });
+    });
+
+    it('refreshes and logs out with CSRF protection', async () => {
+      const email = `${uniqueName('web-csrf')}@example.com`;
+      const password = 'SecurePass1';
+      const agent = request.agent(app.getHttpServer());
+
+      await agent
+        .post('/auth/register')
+        .set('X-Auth-Client', 'web')
+        .send({ email, password })
+        .expect(201);
+
+      const loginRes = await agent
+        .post('/auth/login')
+        .set('X-Auth-Client', 'web')
+        .send({ email, password })
+        .expect(201);
+
+      const csrf = parseSetCookieHeader(
+        loginRes.headers['set-cookie'],
+      ).csrf_token;
+      expect(csrf).toBeDefined();
+
+      await agent
+        .post('/auth/refresh')
+        .set('X-Auth-Client', 'web')
+        .send({})
+        .expect(403);
+
+      const refreshRes = await agent
+        .post('/auth/refresh')
+        .set('X-Auth-Client', 'web')
+        .set('X-CSRF-Token', csrf)
+        .send({})
+        .expect(201);
+
+      const refreshCsrf = parseSetCookieHeader(
+        refreshRes.headers['set-cookie'],
+      ).csrf_token;
+
+      await agent
+        .post('/auth/logout')
+        .set('X-CSRF-Token', refreshCsrf)
+        .send({})
+        .expect(201);
+
+      await agent.get('/auth/me').expect(401);
+    });
+
+    it('still returns bearer tokens for mobile clients (default)', async () => {
+      const email = `${uniqueName('mobile')}@example.com`;
+      const password = 'SecurePass1';
+
+      await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ email, password })
+        .expect(201)
+        .expect((res) => {
+          expect(res.body.accessToken).toBeDefined();
+          expect(res.body.refreshToken).toBeDefined();
+        });
+    });
   });
 });
