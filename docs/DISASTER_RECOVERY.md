@@ -129,15 +129,15 @@ npm run restore:postgres -- /path/to/backup.dump
 
 Run after every restore (including drills):
 
-| Check       | Command / action                            | Expected                                             |
-| ----------- | ------------------------------------------- | ---------------------------------------------------- |
-| Liveness    | `GET /health`                               | `200`, `{ "status": "ok" }`                          |
-| Readiness   | `GET /health/ready`                         | `200`, database + redis up                           |
-| Admin login | `POST /auth/login` with bootstrap admin     | `201`, tokens returned                               |
-| Permissions | `GET /auth/me`                              | `roles` / `permissions` present for admin            |
-| RBAC read   | `GET /roles` as admin                       | `200`, includes `admin` role                         |
-| User list   | `GET /users?page=1&limit=5` as admin        | `200`, paginated data                                |
-| Mail worker | Trigger `POST /auth/password-reset/request` | Job enqueued; worker logs send (or Mailpit receives) |
+| Check       | Command / action                                   | Expected                                             |
+| ----------- | -------------------------------------------------- | ---------------------------------------------------- |
+| Liveness    | `GET /health`                                      | `200`, `{ "status": "ok" }`                          |
+| Readiness   | `GET /health/ready`                                | `200`, database + redis up                           |
+| Admin login | `POST /api/v1/auth/login` with bootstrap admin     | `201`, tokens returned                               |
+| Permissions | `GET /api/v1/auth/me`                              | `roles` / `permissions` present for admin            |
+| RBAC read   | `GET /api/v1/roles` as admin                       | `200`, includes `admin` role                         |
+| User list   | `GET /api/v1/users?page=1&limit=5` as admin        | `200`, paginated data                                |
+| Mail worker | Trigger `POST /api/v1/auth/password-reset/request` | Job enqueued; worker logs send (or Mailpit receives) |
 
 Record results and timestamp in your incident ticket.
 

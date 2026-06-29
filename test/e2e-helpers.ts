@@ -5,8 +5,11 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { MailQueueService } from '@app/queue';
 import { PrismaService, RedisService } from '@app/shared';
-import { configureHttpApp } from '../apps/api/src/app-config';
+import { API_V1_PREFIX, configureHttpApp } from '../apps/api/src/app-config';
 import { AppModule } from '../apps/api/src/app.module';
+
+/** Base path for versioned API routes in e2e tests. */
+export const API_V1 = API_V1_PREFIX;
 
 export const adminCredentials = {
   email: process.env.SEED_ADMIN_EMAIL ?? 'admin@example.com',
@@ -106,7 +109,7 @@ export async function teardownE2eApp(
 
 export async function loginAdmin(app: INestApplication<App>): Promise<string> {
   const res = await request(app.getHttpServer())
-    .post('/auth/login')
+    .post(`${API_V1}/auth/login`)
     .send(adminCredentials);
 
   expect(res.status).toBe(201);
@@ -124,7 +127,7 @@ export async function registerAndVerifyUser(
   const enqueueSpy = jest.spyOn(mailQueue, 'enqueueSend');
 
   const registerRes = await request(app.getHttpServer())
-    .post('/auth/register')
+    .post(`${API_V1}/auth/register`)
     .send({ email, password })
     .expect(201);
 
@@ -135,7 +138,7 @@ export async function registerAndVerifyUser(
   const token = extractVerificationTokenFromMail(verificationCall![0].text);
 
   await request(app.getHttpServer())
-    .post('/auth/email-verification/confirm')
+    .post(`${API_V1}/auth/email-verification/confirm`)
     .send({ token })
     .expect(200);
 
@@ -145,7 +148,7 @@ export async function registerAndVerifyUser(
   const refreshToken = registerRes.body.refreshToken as string;
 
   const meRes = await request(app.getHttpServer())
-    .get('/auth/me')
+    .get(`${API_V1}/auth/me`)
     .set('Authorization', `Bearer ${accessToken}`)
     .expect(200)
     .expect((res) => {
