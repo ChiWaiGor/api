@@ -111,7 +111,12 @@ host, port, and password.
 | Password | `Admin123!@#` (or `SEED_ADMIN_PASSWORD`)    |
 | Role     | `admin` (all permissions)                   |
 
-## Auth flow example
+## Auth flow examples
+
+### Bearer tokens (mobile / default)
+
+Native and mobile clients omit `X-Auth-Client` and receive tokens in the JSON body.
+Use `Authorization: Bearer <accessToken>` on protected routes.
 
 ```bash
 # Login
@@ -134,6 +139,56 @@ curl -s -X POST http://localhost:3000/api/v1/auth/logout \
   -H 'Content-Type: application/json' \
   -d '{"refreshToken":"<refreshToken>"}'
 ```
+
+### Web cookies + CSRF (browser / SPA)
+
+Browser clients send `X-Auth-Client: web` on `POST /api/v1/auth/login`, `register`,
+and `refresh`. The API sets httpOnly cookies (`access_token`, `refresh_token`) and
+a readable `csrf_token` cookie for double-submit CSRF protection. The JSON body is
+`{}` — tokens are not returned in the response.
+
+Mutating requests (`POST`, `PATCH`, `DELETE`, …) that use cookie auth must include
+`X-CSRF-Token` with the same value as the `csrf_token` cookie. Safe methods (`GET`,
+`HEAD`, `OPTIONS`) do not require CSRF. Login, register, and password-reset flows
+are CSRF-exempt.
+
+Send cookies on every request (`credentials: 'include'` in `fetch`, or `withCredentials`
+in axios). CORS is configured with `credentials: true` — see
+`apps/api/src/app-config.ts`.
+
+Implementation: `apps/api/src/auth/auth-cookie.service.ts` (cookie set/clear),
+`apps/api/src/auth/guards/csrf.guard.ts` (CSRF validation).
+
+```bash
+# Login — save cookies to a jar
+curl -s -c cookies.txt -X POST http://localhost:3000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -H 'X-Auth-Client: web' \
+  -d '{"email":"admin@example.com","password":"Admin123!@#"}'
+# Response body: {}
+
+# Authenticated read — cookies sent automatically
+curl -s -b cookies.txt http://localhost:3000/api/v1/auth/me
+
+# Mutating request — CSRF header must match csrf_token cookie
+CSRF=$(awk '$6 == "csrf_token" {print $7}' cookies.txt)
+curl -s -b cookies.txt -c cookies.txt -X POST http://localhost:3000/api/v1/auth/refresh \
+  -H 'Content-Type: application/json' \
+  -H 'X-Auth-Client: web' \
+  -H "X-CSRF-Token: $CSRF" \
+  -d '{}'
+
+# Logout (CSRF required when using cookies)
+CSRF=$(awk '$6 == "csrf_token" {print $7}' cookies.txt)
+curl -s -b cookies.txt -X POST http://localhost:3000/api/v1/auth/logout \
+  -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $CSRF" \
+  -d '{}'
+```
+
+See **[docs/API_CONTRACT.md](docs/API_CONTRACT.md)** for the full frontend-facing
+contract (errors, auth modes, response shapes). Generate a typed client spec with
+`npm run openapi:client-spec` → `openapi/client.json`.
 
 ## Production deployment (Docker)
 
@@ -283,6 +338,7 @@ The API enqueues jobs (e.g. outbound email) via `libs/queue`; the worker consume
 | `npm run start:dev`           | API dev server with watch                                   |
 | `npm run start:dev:worker`    | Worker dev process with watch                               |
 | `npm run build`               | Production build (api + worker)                             |
+| `npm run openapi:client-spec` | Export public OpenAPI spec → `openapi/client.json`          |
 | `npm run start:prod:api`      | Run compiled API                                            |
 | `npm run start:prod:worker`   | Run compiled worker                                         |
 | `npm run lint`                | ESLint with autofix                                         |
