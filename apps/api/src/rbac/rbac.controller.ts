@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
+import { ApiErrorResponses } from '../common/decorators/api-error-responses.decorator';
 import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/types/jwt-payload.type';
@@ -26,6 +27,7 @@ import { RbacService } from './rbac.service';
 
 @ApiTags('rbac')
 @ApiBearerAuth()
+@ApiErrorResponses()
 @Controller()
 export class RbacController {
   constructor(private readonly rbacService: RbacService) {}
