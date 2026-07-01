@@ -209,6 +209,24 @@ export const envSchema = z
         message: 'CORS_ORIGINS cannot be a wildcard (*) in production',
       });
     }
+    // Web auth cookies must be Secure in production (HTTPS). Browsers also require
+    // Secure when SameSite=None for cross-site credentialed requests.
+    if (env.AUTH_COOKIE_SECURE === false) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['AUTH_COOKIE_SECURE'],
+        message:
+          'AUTH_COOKIE_SECURE must be true in production (required for HTTPS and SameSite=None cookies)',
+      });
+    }
+    if (env.AUTH_COOKIE_SAME_SITE === 'none' && !env.AUTH_COOKIE_SECURE) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['AUTH_COOKIE_SAME_SITE'],
+        message:
+          'AUTH_COOKIE_SAME_SITE cannot be "none" without AUTH_COOKIE_SECURE=true (browser requirement)',
+      });
+    }
   });
 
 export type Env = z.infer<typeof envSchema>;
