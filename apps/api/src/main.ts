@@ -2,13 +2,13 @@ import './instrument';
 
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
-import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { ConfigService } from '@nestjs/config';
 import { Env } from '@app/shared';
 import { configureHttpApp } from './app-config';
 import { AppModule } from './app.module';
+import { createApiOpenApiDocument } from './openapi/create-openapi-document';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -26,15 +26,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   if (config.get('SWAGGER_ENABLED', { infer: true })) {
-    const swaggerConfig = new DocumentBuilder()
-      .setTitle('API')
-      .setDescription('NestJS auth and RBAC API')
-      .setVersion('1.0')
-      .addBearerAuth()
-      .build();
-    const document = cleanupOpenApiDoc(
-      SwaggerModule.createDocument(app, swaggerConfig),
-    );
+    const document = createApiOpenApiDocument(app);
     SwaggerModule.setup('docs', app, document);
   }
 

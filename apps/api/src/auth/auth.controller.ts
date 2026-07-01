@@ -13,6 +13,7 @@ import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AllowUnverifiedEmail } from '../common/decorators/allow-unverified-email.decorator';
+import { ApiErrorResponses } from '../common/decorators/api-error-responses.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthCookieService } from './auth-cookie.service';
@@ -35,6 +36,7 @@ import {
 import { isWebAuthClient } from './utils/auth-client.util';
 
 @ApiTags('auth')
+@ApiErrorResponses()
 @Controller('auth')
 export class AuthController {
   constructor(

@@ -9,6 +9,7 @@
     "prepare": "husky",
     "build": "nest build api && nest build worker",
     "build:api": "nest build api",
+    "openapi:client-spec": "ts-node --transpile-only -r tsconfig-paths/register apps/api/src/openapi/export-client-spec.ts",
     "build:worker": "nest build worker",
     "start": "nest start api",
     "start:api": "nest start api",
