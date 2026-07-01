@@ -26,6 +26,5 @@ export function configureHttpApp(app: NestExpressApplication): void {
   app.enableCors({
     origin: config.get('CORS_ORIGINS', { infer: true }),
     credentials: true,
-    exposedHeaders: ['X-CSRF-Token'],
   });
 }

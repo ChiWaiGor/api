@@ -141,10 +141,10 @@ Configured in `apps/api/src/app-config.ts`:
 
 - `credentials: true` — browsers may send cookies cross-origin when the SPA origin is
   listed in `CORS_ORIGINS`.
-- `exposedHeaders: ['X-CSRF-Token']` — allows JS to read this response header if the
-  server ever echoes it (primary CSRF value is the `csrf_token` cookie).
 
-Client requirement: use `fetch(..., { credentials: 'include' })` or equivalent.
+Client requirement: use `fetch(..., { credentials: 'include' })` or equivalent. Read the
+CSRF value from the `csrf_token` cookie (non-httpOnly) and send it as the `X-CSRF-Token`
+request header on mutating requests.
 
 ## Success response shapes
 
