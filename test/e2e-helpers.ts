@@ -7,9 +7,44 @@ import { MailQueueService } from '@app/queue';
 import { PrismaService, RedisService } from '@app/shared';
 import { API_V1_PREFIX, configureHttpApp } from '../apps/api/src/app-config';
 import { AppModule } from '../apps/api/src/app.module';
+import {
+  API_ERROR_CODES,
+  type ApiErrorCode,
+} from '../apps/api/src/common/filters/api-error.util';
 
 /** Base path for versioned API routes in e2e tests. */
 export const API_V1 = API_V1_PREFIX;
+
+export type ApiErrorBodyExpectation = {
+  statusCode: number;
+  code: ApiErrorCode;
+  message?: string;
+  path?: string;
+};
+
+/** Asserts a response body matches the public ApiErrorBody contract. */
+export const expectApiErrorBody = (
+  body: unknown,
+  expected: ApiErrorBodyExpectation,
+): void => {
+  expect(body).toEqual(
+    expect.objectContaining({
+      statusCode: expected.statusCode,
+      code: expected.code,
+      message: expected.message ?? expect.any(String),
+      timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      path: expected.path ?? expect.any(String),
+    }),
+  );
+  expect(body).not.toHaveProperty('error');
+
+  const record = body as { details?: unknown };
+  if (record.details !== undefined) {
+    expect(Array.isArray(record.details)).toBe(true);
+  }
+};
+
+export { API_ERROR_CODES };
 
 export const adminCredentials = {
   email: process.env.SEED_ADMIN_EMAIL ?? 'admin@example.com',
