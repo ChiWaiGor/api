@@ -5,7 +5,9 @@ import { MailQueueService } from '@app/queue';
 import { PrismaService } from '@app/shared';
 import {
   API_V1,
+  API_ERROR_CODES,
   createE2eApp,
+  expectApiErrorBody,
   extractPasswordResetTokenFromMail,
   extractVerificationTokenFromMail,
   parseSetCookieHeader,
@@ -409,6 +411,38 @@ describe('Auth (e2e)', () => {
         .expect(201);
 
       await agent.get(`${API_V1}/auth/me`).expect(401);
+    });
+
+    it('returns standardized ApiErrorBody when CSRF token is missing on change-password', async () => {
+      const email = `${uniqueName('web-csrf-pw')}@example.com`;
+      const password = 'SecurePass1';
+      const agent = request.agent(app.getHttpServer());
+
+      await agent
+        .post(`${API_V1}/auth/register`)
+        .set('X-Auth-Client', 'web')
+        .send({ email, password })
+        .expect(201);
+
+      await agent
+        .post(`${API_V1}/auth/login`)
+        .set('X-Auth-Client', 'web')
+        .send({ email, password })
+        .expect(201);
+
+      await agent
+        .post(`${API_V1}/auth/change-password`)
+        .set('X-Auth-Client', 'web')
+        .send({ currentPassword: password, newPassword: 'NewSecure2' })
+        .expect(403)
+        .expect((res) => {
+          expectApiErrorBody(res.body, {
+            statusCode: 403,
+            code: API_ERROR_CODES.FORBIDDEN,
+            message: 'Invalid or missing CSRF token',
+            path: `${API_V1}/auth/change-password`,
+          });
+        });
     });
 
     it('still returns bearer tokens for mobile clients (default)', async () => {
