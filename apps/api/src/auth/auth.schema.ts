@@ -60,6 +60,35 @@ export const authMeResponseSchema = z.object({
   permissions: z.array(z.string()),
 });
 
+export const authSessionSchema = z.object({
+  id: z.string(),
+  createdAt: z.string().datetime(),
+  expiresAt: z.string().datetime(),
+  isCurrent: z.boolean(),
+});
+
+export const authSessionsResponseSchema = z.object({
+  sessions: z.array(authSessionSchema),
+});
+
+export const revokeAllSessionsBodySchema = requestObject({
+  exceptCurrent: z.boolean().optional().default(false),
+  refreshToken: z.string().min(1, 'Refresh token is required').optional(),
+});
+
+export const revokeAllSessionsResponseSchema = z.object({
+  success: z.boolean(),
+  revokedCount: z.number().int().nonnegative(),
+});
+
+export const listSessionsQuerySchema = z.object({
+  refreshToken: z.string().min(1, 'Refresh token is required').optional(),
+});
+
+export const authSessionParamsSchema = z.object({
+  sessionId: z.string().min(1, 'Session id is required'),
+});
+
 export type RegisterBody = z.infer<typeof registerBodySchema>;
 export type LoginBody = z.infer<typeof loginBodySchema>;
 export type RefreshBody = { refreshToken: string };
@@ -74,6 +103,7 @@ export type ChangePasswordBody = z.infer<typeof changePasswordSchema>;
 export type EmailVerificationConfirmBody = z.infer<
   typeof emailVerificationConfirmSchema
 >;
+export type RevokeAllSessionsBody = z.infer<typeof revokeAllSessionsBodySchema>;
 
 export class RegisterBodyDto extends createZodDto(registerBodySchema) {}
 export class LoginBodyDto extends createZodDto(loginBodySchema) {}
@@ -93,4 +123,20 @@ export class AuthTokensResponseDto extends createZodDto(
   authTokensResponseSchema,
 ) {}
 export class AuthMeResponseDto extends createZodDto(authMeResponseSchema) {}
+export class AuthSessionDto extends createZodDto(authSessionSchema) {}
+export class AuthSessionsResponseDto extends createZodDto(
+  authSessionsResponseSchema,
+) {}
+export class RevokeAllSessionsBodyDto extends createZodDto(
+  revokeAllSessionsBodySchema,
+) {}
+export class RevokeAllSessionsResponseDto extends createZodDto(
+  revokeAllSessionsResponseSchema,
+) {}
+export class ListSessionsQueryDto extends createZodDto(
+  listSessionsQuerySchema,
+) {}
+export class AuthSessionParamsDto extends createZodDto(
+  authSessionParamsSchema,
+) {}
 export class SuccessResponseDto extends createZodDto(successResponseSchema) {}

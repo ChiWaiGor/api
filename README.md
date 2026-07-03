@@ -187,7 +187,7 @@ curl -s -b cookies.txt -X POST http://localhost:3000/api/v1/auth/logout \
 ```
 
 See **[docs/API_CONTRACT.md](docs/API_CONTRACT.md)** for the full frontend-facing
-contract (errors, auth modes, response shapes). Generate a typed client spec with
+contract (errors, auth modes, session management, response shapes). Generate a typed client spec with
 `npm run openapi:client-spec` → `openapi/client.json`.
 
 ## Production deployment (Docker)
@@ -262,11 +262,11 @@ coverage gates apply locally before push.
 
 ## API overview
 
-| Module | Routes                                                                                                                                                                                                                                                                    |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth   | `POST /api/v1/auth/register`, `login`, `refresh`, `logout`; `GET /api/v1/auth/me`                                                                                                                                                                                         |
-| Users  | `GET/POST /api/v1/users`, `GET/PATCH/DELETE /api/v1/users/:id`                                                                                                                                                                                                            |
-| RBAC   | `GET /api/v1/roles`, `GET /api/v1/permissions`, `POST /api/v1/roles`, `PATCH /api/v1/roles/:id`, `DELETE /api/v1/roles/:id`, `POST /api/v1/roles/assign`, `POST /api/v1/roles/unassign`, `POST /api/v1/roles/permissions/attach`, `POST /api/v1/roles/permissions/detach` |
+| Module | Routes                                                                                                                                                                                                                                                                                             |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth   | `POST /api/v1/auth/register`, `login`, `refresh`, `logout`, `change-password`, `password-reset/request`, `password-reset/confirm`, `email-verification/request`, `email-verification/confirm`, `sessions/revoke-all`; `GET /api/v1/auth/me`, `sessions`; `DELETE /api/v1/auth/sessions/:sessionId` |
+| Users  | `GET/POST /api/v1/users`, `GET/PATCH/DELETE /api/v1/users/:id`                                                                                                                                                                                                                                     |
+| RBAC   | `GET /api/v1/roles`, `GET /api/v1/permissions`, `POST /api/v1/roles`, `PATCH /api/v1/roles/:id`, `DELETE /api/v1/roles/:id`, `POST /api/v1/roles/assign`, `POST /api/v1/roles/unassign`, `POST /api/v1/roles/permissions/attach`, `POST /api/v1/roles/permissions/detach`                          |
 
 Permissions are defined in code (`apps/api/src/rbac/permissions.constants.ts`) and synced via seed. They include `users:read`, `users:write`, `users:delete`, `roles:read`, `roles:manage`, `permissions:read`, and `permissions:manage` (the last is catalog-only; there is no runtime permission API).
 
