@@ -35,14 +35,16 @@ describe('client-spec.util', () => {
   });
 
   describe('toClientOpenApiSpec', () => {
+    const stubOperation = { responses: {} };
+
     const baseDocument: OpenAPIObject = {
       openapi: '3.0.0',
       info: { title: 'API', version: '1.0' },
       paths: {
-        '/api/v1/auth/login': { post: {} },
-        '/health': { get: {} },
-        '/metrics': { get: {} },
-        '/docs': { get: {} },
+        '/api/v1/auth/login': { post: stubOperation },
+        '/health': { get: stubOperation },
+        '/metrics': { get: stubOperation },
+        '/docs': { get: stubOperation },
       },
     };
 
@@ -51,15 +53,17 @@ describe('client-spec.util', () => {
 
       expect(result.servers).toEqual([{ url: CLIENT_SPEC_SERVER_URL }]);
       expect(result.paths).toEqual({
-        '/auth/login': { post: {} },
+        '/auth/login': { post: stubOperation },
       });
     });
 
     it('handles documents with no paths', () => {
-      const result = toClientOpenApiSpec({
+      const documentWithoutPaths = {
         ...baseDocument,
         paths: undefined,
-      });
+      } as unknown as OpenAPIObject;
+
+      const result = toClientOpenApiSpec(documentWithoutPaths);
 
       expect(result.paths).toEqual({});
     });
