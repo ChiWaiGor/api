@@ -141,20 +141,35 @@ Configured in `apps/api/src/app-config.ts`:
 
 - `credentials: true` — browsers may send cookies cross-origin when the SPA origin is
   listed in `CORS_ORIGINS`.
-- `exposedHeaders: ['X-CSRF-Token']` — allows JS to read this response header if the
-  server ever echoes it (primary CSRF value is the `csrf_token` cookie).
 
-Client requirement: use `fetch(..., { credentials: 'include' })` or equivalent.
+Client requirement: use `fetch(..., { credentials: 'include' })` or equivalent. Read the
+CSRF value from the `csrf_token` cookie (non-httpOnly) and send it as the `X-CSRF-Token`
+request header on mutating requests.
 
 ## Success response shapes
 
 Responses are **raw DTOs** (no `{ data: ... }` envelope).
 
-| Operation type                                                          | Mobile (Bearer)                 | Web (`X-Auth-Client: web`)  |
-| ----------------------------------------------------------------------- | ------------------------------- | --------------------------- |
-| login / register / refresh                                              | `{ accessToken, refreshToken }` | `{}`                        |
-| logout, password reset, email verification, RBAC mutations, user delete | `{ "success": true }`           | same                        |
-| `GET /auth/me`, user/role reads                                         | Resource DTO                    | same (cookies authenticate) |
+| Operation type                                                          | Mobile (Bearer)                 | Web (`X-Auth-Client: web`)                               |
+| ----------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------- |
+| login / register / refresh                                              | `{ accessToken, refreshToken }` | `{}`                                                     |
+| logout, password reset, email verification, RBAC mutations, user delete | `{ "success": true }`           | same                                                     |
+| `GET /auth/me`, user/role reads                                         | Resource DTO                    | same (cookies authenticate)                              |
+| `GET /auth/sessions`                                                    | `{ sessions: [...] }`           | same                                                     |
+| `POST /auth/sessions/revoke-all`                                        | `{ success, revokedCount }`     | same; clears cookies when revoking all including current |
+| `DELETE /auth/sessions/:sessionId`                                      | `{ "success": true }`           | same; clears cookies when revoking the current session   |
+
+### Session management
+
+Active sessions are keyed by refresh-token **family id** (one family per login). Use these routes from account/security screens:
+
+| Method   | Path                               | Description                                                                                                                                                                                                                                                                      |
+| -------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/v1/auth/sessions`            | List active sessions (`id`, `createdAt`, `expiresAt`, `isCurrent`). Pass `refreshToken` as a query param (mobile) or rely on the httpOnly `refresh_token` cookie (web) to mark the current session.                                                                              |
+| `POST`   | `/api/v1/auth/sessions/revoke-all` | Revoke refresh tokens. Body: `{ "exceptCurrent": false }` logs out everywhere (default); `{ "exceptCurrent": true, "refreshToken": "..." }` signs out other devices but keeps the caller's session. Optional `refreshToken` in the body for mobile when `exceptCurrent` is true. |
+| `DELETE` | `/api/v1/auth/sessions/:sessionId` | Revoke a single session by family id. Revoking the current session also blacklists the access token and clears auth cookies.                                                                                                                                                     |
+
+All session routes require a verified email (same as `change-password`).
 
 List endpoints return paginated objects (e.g. `{ items, total, page, pageSize }` for
 users). See route handlers under `apps/api/src/` or the generated OpenAPI spec.

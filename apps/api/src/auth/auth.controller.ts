@@ -2,10 +2,13 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
+  Query,
   Req,
   Res,
 } from '@nestjs/common';
@@ -22,15 +25,20 @@ import { AUTH_CLIENT_HEADER } from './constants/auth-cookies.constants';
 import { CsrfExempt } from './decorators/csrf-exempt.decorator';
 import {
   AuthMeResponseDto,
+  AuthSessionParamsDto,
+  AuthSessionsResponseDto,
   AuthTokensResponseDto,
   ChangePasswordDto,
   EmailVerificationConfirmDto,
+  ListSessionsQueryDto,
   LoginBodyDto,
   LogoutBodyDto,
   PasswordResetConfirmDto,
   PasswordResetRequestDto,
   RefreshBodyDto,
   RegisterBodyDto,
+  RevokeAllSessionsBodyDto,
+  RevokeAllSessionsResponseDto,
   SuccessResponseDto,
 } from './auth.schema';
 import { isWebAuthClient } from './utils/auth-client.util';
@@ -177,6 +185,76 @@ export class AuthController {
   }
 
   @ApiBearerAuth()
+  @Get('sessions')
+  listSessions(
+    @CurrentUser() user: { sub: string },
+    @Req() req: Request,
+    @Query() query: ListSessionsQueryDto,
+  ): Promise<AuthSessionsResponseDto> {
+    const refreshToken = this.getOptionalRefreshToken(req, query.refreshToken);
+    return this.authService.listSessions(user.sub, refreshToken);
+  }
+
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @Post('sessions/revoke-all')
+  async revokeAllSessions(
+    @Body() body: RevokeAllSessionsBodyDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @CurrentUser() user: { sub: string; jti: string },
+  ): Promise<RevokeAllSessionsResponseDto> {
+    const refreshToken = this.getOptionalRefreshToken(req, body.refreshToken);
+    const result = await this.authService.revokeAllSessions(user.sub, {
+      exceptCurrent: body.exceptCurrent,
+      currentRefreshToken: refreshToken,
+      accessJti: body.exceptCurrent ? undefined : user.jti,
+    });
+
+    if (
+      !body.exceptCurrent &&
+      (isWebAuthClient(req) || this.authCookies.hasAuthCookies(req))
+    ) {
+      this.authCookies.clearAuthCookies(res);
+    }
+
+    return result;
+  }
+
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @Delete('sessions/:sessionId')
+  async revokeSession(
+    @Param() params: AuthSessionParamsDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @CurrentUser() user: { sub: string; jti: string },
+  ): Promise<SuccessResponseDto> {
+    const refreshToken = this.getOptionalRefreshToken(req);
+    const result = await this.authService.revokeSession(
+      user.sub,
+      params.sessionId,
+      {
+        accessJti: user.jti,
+        currentRefreshToken: refreshToken,
+      },
+    );
+
+    const currentFamilyId = await this.authService.resolveSessionFamilyId(
+      user.sub,
+      refreshToken,
+    );
+    if (
+      currentFamilyId === params.sessionId &&
+      (isWebAuthClient(req) || this.authCookies.hasAuthCookies(req))
+    ) {
+      this.authCookies.clearAuthCookies(res);
+    }
+
+    return result;
+  }
+
+  @ApiBearerAuth()
   @SkipThrottle({ default: true })
   @Throttle({ auth: {} })
   @HttpCode(HttpStatus.OK)
@@ -211,5 +289,14 @@ export class AuthController {
       throw new BadRequestException('Refresh token is required');
     }
     return refreshToken ?? '';
+  }
+
+  private getOptionalRefreshToken(
+    req: Request,
+    refreshTokenQuery?: string,
+  ): string | undefined {
+    const refreshToken =
+      refreshTokenQuery ?? this.authCookies.getRefreshToken(req);
+    return refreshToken && refreshToken.length > 0 ? refreshToken : undefined;
   }
 }

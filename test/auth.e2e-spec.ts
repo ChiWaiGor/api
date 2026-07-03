@@ -425,4 +425,122 @@ describe('Auth (e2e)', () => {
         });
     });
   });
+
+  describe('sessions', () => {
+    it('lists active sessions, revokes other sessions, and logs out everywhere', async () => {
+      const { email, password } = await registerAndVerifyUser(app, 'sessions');
+
+      const loginA = await request(app.getHttpServer())
+        .post(`${API_V1}/auth/login`)
+        .send({ email, password })
+        .expect(201);
+
+      const loginB = await request(app.getHttpServer())
+        .post(`${API_V1}/auth/login`)
+        .send({ email, password })
+        .expect(201);
+
+      const accessA = loginA.body.accessToken as string;
+      const refreshA = loginA.body.refreshToken as string;
+      const refreshB = loginB.body.refreshToken as string;
+
+      const listRes = await request(app.getHttpServer())
+        .get(`${API_V1}/auth/sessions`)
+        .query({ refreshToken: refreshA })
+        .set('Authorization', `Bearer ${accessA}`)
+        .expect(200);
+
+      expect(listRes.body.sessions.length).toBeGreaterThanOrEqual(2);
+      expect(
+        listRes.body.sessions.filter(
+          (session: { isCurrent: boolean }) => session.isCurrent,
+        ),
+      ).toHaveLength(1);
+
+      await request(app.getHttpServer())
+        .post(`${API_V1}/auth/sessions/revoke-all`)
+        .set('Authorization', `Bearer ${accessA}`)
+        .send({ exceptCurrent: true, refreshToken: refreshA })
+        .expect(200)
+        .expect((res) => {
+          expect(res.body.success).toBe(true);
+          expect(res.body.revokedCount).toBeGreaterThanOrEqual(1);
+        });
+
+      await request(app.getHttpServer())
+        .post(`${API_V1}/auth/refresh`)
+        .send({ refreshToken: refreshB })
+        .expect(401);
+
+      await request(app.getHttpServer())
+        .post(`${API_V1}/auth/refresh`)
+        .send({ refreshToken: refreshA })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`${API_V1}/auth/sessions/revoke-all`)
+        .set('Authorization', `Bearer ${accessA}`)
+        .send({ exceptCurrent: false })
+        .expect(200)
+        .expect((res) => {
+          expect(res.body.success).toBe(true);
+          expect(res.body.revokedCount).toBeGreaterThanOrEqual(1);
+        });
+
+      await request(app.getHttpServer())
+        .get(`${API_V1}/auth/me`)
+        .set('Authorization', `Bearer ${accessA}`)
+        .expect(401);
+    });
+
+    it('revokes a single non-current session', async () => {
+      const { email, password } = await registerAndVerifyUser(
+        app,
+        'session-revoke-one',
+      );
+
+      const loginA = await request(app.getHttpServer())
+        .post(`${API_V1}/auth/login`)
+        .send({ email, password })
+        .expect(201);
+
+      const loginB = await request(app.getHttpServer())
+        .post(`${API_V1}/auth/login`)
+        .send({ email, password })
+        .expect(201);
+
+      const accessA = loginA.body.accessToken as string;
+      const refreshA = loginA.body.refreshToken as string;
+      const refreshB = loginB.body.refreshToken as string;
+
+      const listRes = await request(app.getHttpServer())
+        .get(`${API_V1}/auth/sessions`)
+        .query({ refreshToken: refreshA })
+        .set('Authorization', `Bearer ${accessA}`)
+        .expect(200);
+
+      const otherSession = listRes.body.sessions.find(
+        (session: { isCurrent: boolean }) => !session.isCurrent,
+      );
+      expect(otherSession).toBeDefined();
+
+      await request(app.getHttpServer())
+        .delete(`${API_V1}/auth/sessions/${otherSession.id}`)
+        .set('Authorization', `Bearer ${accessA}`)
+        .expect(200)
+        .expect((res) => {
+          expect(res.body.success).toBe(true);
+        });
+
+      await request(app.getHttpServer())
+        .post(`${API_V1}/auth/refresh`)
+        .send({ refreshToken: refreshB })
+        .expect(401);
+
+      await request(app.getHttpServer())
+        .get(`${API_V1}/auth/me`)
+        .set('Authorization', `Bearer ${accessA}`)
+        .expect(200);
+    });
+  });
 });

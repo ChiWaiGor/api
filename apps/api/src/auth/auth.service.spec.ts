@@ -19,6 +19,8 @@ describe('AuthService', () => {
     user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
     refreshToken: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
+      groupBy: jest.fn(),
       update: jest.fn(),
       create: jest.fn(),
       updateMany: jest.fn(),
@@ -294,6 +296,131 @@ describe('AuthService', () => {
         900,
         '1',
       );
+    });
+  });
+
+  describe('sessions', () => {
+    it('lists active sessions and marks the current session', async () => {
+      jwt.verifyAsync.mockResolvedValue({
+        sub: 'user-1',
+        tokenId: 'rt-current',
+        jti: 'jti',
+      });
+      prisma.refreshToken.groupBy.mockResolvedValue([
+        {
+          familyId: 'family-1',
+          _min: { createdAt: new Date('2026-01-02T00:00:00.000Z') },
+          _max: { expiresAt: new Date('2026-02-01T00:00:00.000Z') },
+        },
+        {
+          familyId: 'family-2',
+          _min: { createdAt: new Date('2026-01-01T00:00:00.000Z') },
+          _max: { expiresAt: new Date('2026-02-01T00:00:00.000Z') },
+        },
+      ]);
+      prisma.refreshToken.findFirst
+        .mockResolvedValueOnce({ familyId: 'family-1' })
+        .mockResolvedValueOnce({
+          createdAt: new Date('2026-01-02T00:00:00.000Z'),
+        })
+        .mockResolvedValueOnce({
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        });
+
+      const result = await service.listSessions('user-1', 'refresh-token');
+
+      expect(result.sessions).toHaveLength(2);
+      expect(result.sessions[0]).toMatchObject({
+        id: 'family-1',
+        createdAt: new Date('2026-01-02T00:00:00.000Z').toISOString(),
+        expiresAt: new Date('2026-02-01T00:00:00.000Z').toISOString(),
+        isCurrent: true,
+      });
+      expect(result.sessions[1]).toMatchObject({
+        id: 'family-2',
+        createdAt: new Date('2026-01-01T00:00:00.000Z').toISOString(),
+        expiresAt: new Date('2026-02-01T00:00:00.000Z').toISOString(),
+        isCurrent: false,
+      });
+    });
+
+    it('revokes all sessions and blacklists access when logging out everywhere', async () => {
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 2 });
+      redis.setex.mockResolvedValue('OK');
+
+      const result = await service.revokeAllSessions('user-1', {
+        accessJti: 'access-jti',
+      });
+
+      expect(result).toEqual({ success: true, revokedCount: 2 });
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: 'user-1', revokedAt: null },
+        }),
+      );
+      expect(redis.setex).toHaveBeenCalledWith(
+        redisKeys.accessBlacklist('access-jti'),
+        900,
+        '1',
+      );
+    });
+
+    it('revokes other sessions but keeps the current session', async () => {
+      jwt.verifyAsync.mockResolvedValue({
+        sub: 'user-1',
+        tokenId: 'rt-current',
+        jti: 'jti',
+      });
+      prisma.refreshToken.findFirst.mockResolvedValue({ familyId: 'family-1' });
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.revokeAllSessions('user-1', {
+        exceptCurrent: true,
+        currentRefreshToken: 'refresh-token',
+      });
+
+      expect(result).toEqual({ success: true, revokedCount: 1 });
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            userId: 'user-1',
+            revokedAt: null,
+            familyId: { not: 'family-1' },
+          },
+        }),
+      );
+      expect(redis.setex).not.toHaveBeenCalled();
+    });
+
+    it('revokes a single session and blacklists access when it is current', async () => {
+      jwt.verifyAsync.mockResolvedValue({
+        sub: 'user-1',
+        tokenId: 'rt-current',
+        jti: 'jti',
+      });
+      prisma.refreshToken.findFirst.mockResolvedValue({ familyId: 'family-1' });
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+      redis.setex.mockResolvedValue('OK');
+
+      const result = await service.revokeSession('user-1', 'family-1', {
+        accessJti: 'access-jti',
+        currentRefreshToken: 'refresh-token',
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(redis.setex).toHaveBeenCalledWith(
+        redisKeys.accessBlacklist('access-jti'),
+        900,
+        '1',
+      );
+    });
+
+    it('throws when revoking an unknown session', async () => {
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.revokeSession('user-1', 'missing-family'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
     });
   });
 

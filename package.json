@@ -129,8 +129,9 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "apps/**/*.service.ts",
-      "libs/**/*.service.ts"
+      "apps/**/*.{service,util,guard,filter,strategy,interceptor,pipe}.ts",
+      "apps/**/utils/**/*.ts",
+      "libs/**/*.{service,util}.ts"
     ],
     "coverageDirectory": "./coverage",
     "coverageThreshold": {

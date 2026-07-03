@@ -1,6 +1,7 @@
 import {
   ArgumentsHost,
   BadRequestException,
+  HttpException,
   HttpStatus,
   InternalServerErrorException,
   ServiceUnavailableException,
@@ -122,5 +123,19 @@ describe('HttpExceptionFilter', () => {
         message: 'Upstream failed',
       }),
     );
+  });
+
+  it('passes through operational paths with string exception bodies', () => {
+    const exception = new HttpException(
+      'Redis unavailable',
+      HttpStatus.SERVICE_UNAVAILABLE,
+    );
+    const { host, status, json } = createHost('/metrics');
+
+    filter.catch(exception, host);
+
+    expect(status).toHaveBeenCalledWith(HttpStatus.SERVICE_UNAVAILABLE);
+    expect(json).toHaveBeenCalledWith({ message: 'Redis unavailable' });
+    expect(captureMock).not.toHaveBeenCalled();
   });
 });

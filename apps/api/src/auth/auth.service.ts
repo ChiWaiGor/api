@@ -220,17 +220,155 @@ export class AuthService {
     }
 
     if (accessJti) {
-      const ttlSeconds = this.parseTtlToSeconds(
-        this.config.get('JWT_ACCESS_TTL', { infer: true }),
-      );
-      await this.redis.setex(
-        redisKeys.accessBlacklist(accessJti),
-        ttlSeconds,
-        '1',
-      );
+      await this.blacklistAccessToken(accessJti);
     }
 
     return { success: true };
+  }
+
+  async listSessions(userId: string, currentRefreshToken?: string) {
+    const currentFamilyId = await this.resolveSessionFamilyId(
+      userId,
+      currentRefreshToken,
+    );
+    const now = new Date();
+
+    const activeFamilies = await this.prisma.refreshToken.groupBy({
+      by: ['familyId'],
+      where: {
+        userId,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+      _min: { createdAt: true },
+      _max: { expiresAt: true },
+    });
+
+    const sessionStarts = (
+      await Promise.all(
+        activeFamilies.map(async (family) => {
+          const first = await this.prisma.refreshToken.findFirst({
+            where: { userId, familyId: family.familyId },
+            orderBy: { createdAt: 'asc' },
+            select: { createdAt: true },
+          });
+          const createdAt = first?.createdAt ?? family._min.createdAt;
+          const expiresAt = family._max.expiresAt;
+          if (!createdAt || !expiresAt) {
+            return null;
+          }
+          return {
+            familyId: family.familyId,
+            createdAt,
+            expiresAt,
+          };
+        }),
+      )
+    ).filter(
+      (session): session is NonNullable<typeof session> => session !== null,
+    );
+
+    return {
+      sessions: sessionStarts
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .map((session) => ({
+          id: session.familyId,
+          createdAt: session.createdAt.toISOString(),
+          expiresAt: session.expiresAt.toISOString(),
+          isCurrent: session.familyId === currentFamilyId,
+        })),
+    };
+  }
+
+  async revokeAllSessions(
+    userId: string,
+    options: {
+      exceptCurrent?: boolean;
+      currentRefreshToken?: string;
+      accessJti?: string;
+    },
+  ) {
+    const currentFamilyId = options.exceptCurrent
+      ? await this.resolveSessionFamilyId(userId, options.currentRefreshToken)
+      : undefined;
+
+    const result = await this.prisma.refreshToken.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+        ...(currentFamilyId ? { familyId: { not: currentFamilyId } } : {}),
+      },
+      data: { revokedAt: new Date() },
+    });
+
+    if (!options.exceptCurrent && options.accessJti) {
+      await this.blacklistAccessToken(options.accessJti);
+    }
+
+    return { success: true as const, revokedCount: result.count };
+  }
+
+  async revokeSession(
+    userId: string,
+    sessionId: string,
+    options?: { accessJti?: string; currentRefreshToken?: string },
+  ) {
+    const currentFamilyId = await this.resolveSessionFamilyId(
+      userId,
+      options?.currentRefreshToken,
+    );
+    const isCurrentSession = currentFamilyId === sessionId;
+
+    const result = await this.prisma.refreshToken.updateMany({
+      where: {
+        userId,
+        familyId: sessionId,
+        revokedAt: null,
+      },
+      data: { revokedAt: new Date() },
+    });
+
+    if (result.count === 0) {
+      throw new UnauthorizedException('Session not found');
+    }
+
+    if (isCurrentSession && options?.accessJti) {
+      await this.blacklistAccessToken(options.accessJti);
+    }
+
+    return { success: true as const };
+  }
+
+  async resolveSessionFamilyId(
+    userId: string,
+    refreshToken?: string,
+  ): Promise<string | undefined> {
+    if (!refreshToken) {
+      return undefined;
+    }
+
+    try {
+      const payload = await this.jwt.verifyAsync<JwtRefreshPayload>(
+        refreshToken,
+        {
+          secret: this.config.get('JWT_REFRESH_SECRET', { infer: true }),
+          ignoreExpiration: true,
+        },
+      );
+
+      if (payload.sub !== userId) {
+        return undefined;
+      }
+
+      const stored = await this.prisma.refreshToken.findFirst({
+        where: { id: payload.tokenId, userId },
+        select: { familyId: true },
+      });
+
+      return stored?.familyId;
+    } catch {
+      return undefined;
+    }
   }
 
   async getMe(userId: string) {
@@ -528,6 +666,13 @@ export class AuthService {
     });
 
     return { accessToken, refreshToken };
+  }
+
+  private async blacklistAccessToken(jti: string): Promise<void> {
+    const ttlSeconds = this.parseTtlToSeconds(
+      this.config.get('JWT_ACCESS_TTL', { infer: true }),
+    );
+    await this.redis.setex(redisKeys.accessBlacklist(jti), ttlSeconds, '1');
   }
 
   private async revokeTokenFamily(familyId: string): Promise<void> {

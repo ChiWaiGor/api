@@ -2,6 +2,7 @@ import { HttpStatus } from '@nestjs/common';
 import {
   API_ERROR_CODES,
   buildApiErrorBody,
+  getRequestId,
   getRequestPath,
   isOperationalExemptPath,
   mapZodIssuesToDetails,
@@ -32,6 +33,42 @@ describe('api-error.util', () => {
     it('strips query strings', () => {
       expect(getRequestPath({ url: '/users?page=1' } as never)).toBe('/users');
     });
+
+    it('falls back to / when url is missing', () => {
+      expect(getRequestPath({} as never)).toBe('/');
+    });
+  });
+
+  describe('getRequestId', () => {
+    it('reads X-Request-Id header', () => {
+      expect(
+        getRequestId({ headers: { 'x-request-id': 'req-abc' } } as never),
+      ).toBe('req-abc');
+    });
+
+    it('reads string request.id', () => {
+      expect(getRequestId({ headers: {}, id: 'req-123' } as never)).toBe(
+        'req-123',
+      );
+    });
+
+    it('stringifies numeric request.id', () => {
+      expect(getRequestId({ headers: {}, id: 42 } as never)).toBe('42');
+    });
+
+    it('returns undefined when no id is present', () => {
+      expect(getRequestId({ headers: {} } as never)).toBeUndefined();
+    });
+
+    it('returns undefined for empty x-request-id header', () => {
+      expect(
+        getRequestId({ headers: { 'x-request-id': '' } } as never),
+      ).toBeUndefined();
+    });
+
+    it('returns undefined for empty string request.id', () => {
+      expect(getRequestId({ headers: {}, id: '' } as never)).toBeUndefined();
+    });
   });
 
   describe('statusToErrorCode', () => {
@@ -43,6 +80,10 @@ describe('api-error.util', () => {
         API_ERROR_CODES.TOO_MANY_REQUESTS,
       );
       expect(statusToErrorCode(599)).toBe(API_ERROR_CODES.INTERNAL_ERROR);
+    });
+
+    it('maps unknown 4xx statuses to BAD_REQUEST', () => {
+      expect(statusToErrorCode(418)).toBe(API_ERROR_CODES.BAD_REQUEST);
     });
   });
 
@@ -64,6 +105,12 @@ describe('api-error.util', () => {
         details: [{ message: 'field is required' }],
       });
     });
+
+    it('falls back when message is missing', () => {
+      expect(parseHttpExceptionResponse({ statusCode: 400 })).toEqual({
+        message: 'Error',
+      });
+    });
   });
 
   describe('mapZodIssuesToDetails', () => {
@@ -73,6 +120,14 @@ describe('api-error.util', () => {
           { code: 'custom', message: 'Invalid email', path: ['email'] },
         ] as never),
       ).toEqual([{ path: 'email', code: 'custom', message: 'Invalid email' }]);
+    });
+
+    it('omits path when Zod issue path is empty', () => {
+      expect(
+        mapZodIssuesToDetails([
+          { code: 'custom', message: 'Root error', path: [] },
+        ] as never),
+      ).toEqual([{ code: 'custom', message: 'Root error' }]);
     });
   });
 
