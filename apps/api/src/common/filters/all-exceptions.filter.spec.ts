@@ -1,5 +1,7 @@
 import { ArgumentsHost, BadRequestException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ZodValidationException } from 'nestjs-zod';
+import { ZodError } from 'zod';
 import { Env, captureSentryException } from '@app/shared';
 import { API_ERROR_CODES } from './api-error.util';
 import { AllExceptionsFilter } from './all-exceptions.filter';
@@ -95,6 +97,50 @@ describe('AllExceptionsFilter', () => {
         code: API_ERROR_CODES.BAD_REQUEST,
         message: 'Bad input',
         path: '/bad',
+      }),
+    );
+  });
+
+  it('delegates ZodValidationException to ZodValidationExceptionFilter', () => {
+    const filter = createFilter('development');
+    const zodError = new ZodError([
+      { code: 'custom', message: 'Invalid email', path: ['email'] },
+    ]);
+    const exception = new ZodValidationException(zodError);
+    const { host, status, json } = createHost('/auth/register');
+
+    filter.catch(exception, host);
+
+    expect(captureMock).not.toHaveBeenCalled();
+    expect(status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: API_ERROR_CODES.VALIDATION_FAILED,
+        details: [{ path: 'email', code: 'custom', message: 'Invalid email' }],
+      }),
+    );
+  });
+
+  it('uses generic message for non-Error throwables in development', () => {
+    const filter = createFilter('development');
+    const throwable = 'string failure';
+    const { host, status, json } = createHost('/broken');
+
+    filter.catch(throwable, host);
+
+    expect(captureMock).toHaveBeenCalledWith(throwable, {
+      requestId: undefined,
+      userId: 'user-1',
+      path: '/broken',
+      method: 'GET',
+    });
+    expect(status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        code: API_ERROR_CODES.INTERNAL_ERROR,
+        message: 'Internal server error',
+        path: '/broken',
       }),
     );
   });

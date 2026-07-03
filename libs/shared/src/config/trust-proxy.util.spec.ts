@@ -45,4 +45,8 @@ describe('parseTrustProxy', () => {
     expect(() => parseTrustProxy('10.0.0.0/99')).toThrow(/Invalid TRUST_PROXY/);
     expect(() => parseTrustProxy('1.2.3')).toThrow(/Invalid TRUST_PROXY/);
   });
+
+  it('returns false for comma-separated lists that filter to empty', () => {
+    expect(parseTrustProxy(' , ')).toBe(false);
+  });
 });

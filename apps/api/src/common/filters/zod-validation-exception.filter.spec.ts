@@ -45,4 +45,19 @@ describe('ZodValidationExceptionFilter', () => {
     );
     expect(json.mock.calls[0][0]).not.toHaveProperty('errors');
   });
+
+  it('falls back when getZodError is not a ZodError instance', () => {
+    const exception = {
+      getZodError: () => ({ issues: [] }),
+    } as unknown as ZodValidationException;
+    const { host, json } = createHost('/auth/register');
+
+    filter.catch(exception, host);
+
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: [{ message: 'Validation failed' }],
+      }),
+    );
+  });
 });
