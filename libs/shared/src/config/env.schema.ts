@@ -155,6 +155,8 @@ export const envSchema = z
         const trimmed = v?.trim();
         return trimmed ? trimmed : undefined;
       }),
+    // Liveness endpoint for the background worker (it has no HTTP API).
+    WORKER_HEALTH_PORT: z.coerce.number().int().positive().default(8081),
     // Prometheus metrics scrape endpoint (separate HTTP server on METRICS_PORT).
     METRICS_ENABLED: z
       .string()
