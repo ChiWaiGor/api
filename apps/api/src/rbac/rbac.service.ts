@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -25,6 +26,8 @@ import type {
 
 @Injectable()
 export class RbacService {
+  private readonly logger = new Logger(RbacService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
@@ -37,7 +40,17 @@ export class RbacService {
   }
 
   async invalidateUserPermissionCache(userId: string): Promise<void> {
-    await this.redis.del(redisKeys.permissionCache(userId));
+    try {
+      await this.redis.del(redisKeys.permissionCache(userId));
+    } catch (error) {
+      // The DB mutation has already committed; failing the request here would
+      // not undo it. Log loudly — stale grants persist for at most
+      // PERMISSION_CACHE_TTL_SECONDS.
+      this.logger.error(
+        `Failed to invalidate permission cache for user ${userId}; stale permissions possible until cache TTL expires`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 
   async getUserRoles(userId: string): Promise<string[]> {
