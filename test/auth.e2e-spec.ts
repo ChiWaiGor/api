@@ -11,6 +11,7 @@ import {
   extractPasswordResetTokenFromMail,
   extractVerificationTokenFromMail,
   parseSetCookieHeader,
+  registerAndLoginUser,
   registerAndVerifyUser,
   teardownE2eApp,
   uniqueName,
@@ -34,10 +35,10 @@ describe('Auth (e2e)', () => {
     const registerRes = await request(app.getHttpServer())
       .post(`${API_V1}/auth/register`)
       .send({ email, password })
-      .expect(201);
+      .expect(200);
 
-    expect(registerRes.body.accessToken).toBeDefined();
-    expect(registerRes.body.refreshToken).toBeDefined();
+    // Registration never returns tokens — clients log in afterwards.
+    expect(registerRes.body).toEqual({ success: true });
 
     const loginRes = await request(app.getHttpServer())
       .post(`${API_V1}/auth/login`)
@@ -75,19 +76,31 @@ describe('Auth (e2e)', () => {
       .expect(401);
   });
 
-  it('rejects duplicate registration', async () => {
+  it('returns an identical response for duplicate registration (no enumeration)', async () => {
     const email = `${uniqueName('dup')}@example.com`;
     const password = 'SecurePass1';
+    const mailQueue = app.get(MailQueueService);
+    const enqueueSpy = jest.spyOn(mailQueue, 'enqueueSend');
 
-    await request(app.getHttpServer())
+    const first = await request(app.getHttpServer())
       .post(`${API_V1}/auth/register`)
       .send({ email, password })
-      .expect(201);
+      .expect(200);
 
-    await request(app.getHttpServer())
+    const second = await request(app.getHttpServer())
       .post(`${API_V1}/auth/register`)
       .send({ email, password })
-      .expect(409);
+      .expect(200);
+
+    expect(second.body).toEqual(first.body);
+
+    // The existing owner is notified instead of leaking state to the caller.
+    const noticeCall = enqueueSpy.mock.calls.find(
+      ([msg]) =>
+        msg.subject === 'You already have an account' && msg.to === email,
+    );
+    expect(noticeCall).toBeDefined();
+    enqueueSpy.mockRestore();
   });
 
   it('rejects invalid login credentials', async () => {
@@ -122,7 +135,7 @@ describe('Auth (e2e)', () => {
     await request(app.getHttpServer())
       .post(`${API_V1}/auth/register`)
       .send({ email, password })
-      .expect(201);
+      .expect(200);
 
     const loginRes = await request(app.getHttpServer())
       .post(`${API_V1}/auth/login`)
@@ -152,12 +165,17 @@ describe('Auth (e2e)', () => {
     const email = `${uniqueName('verified')}@example.com`;
     const password = 'SecurePass1';
 
-    const registerRes = await request(app.getHttpServer())
+    await request(app.getHttpServer())
       .post(`${API_V1}/auth/register`)
+      .send({ email, password })
+      .expect(200);
+
+    const loginRes = await request(app.getHttpServer())
+      .post(`${API_V1}/auth/login`)
       .send({ email, password })
       .expect(201);
 
-    const { accessToken } = registerRes.body;
+    const { accessToken } = loginRes.body;
 
     await request(app.getHttpServer())
       .get(`${API_V1}/users?page=1&limit=5`)
@@ -191,17 +209,14 @@ describe('Auth (e2e)', () => {
   });
 
   it('rejects change-password for unverified users', async () => {
-    const email = `${uniqueName('unverified-pw')}@example.com`;
-    const password = 'SecurePass1';
-
-    const registerRes = await request(app.getHttpServer())
-      .post(`${API_V1}/auth/register`)
-      .send({ email, password })
-      .expect(201);
+    const { accessToken, password } = await registerAndLoginUser(
+      app,
+      'unverified-pw',
+    );
 
     await request(app.getHttpServer())
       .post(`${API_V1}/auth/change-password`)
-      .set('Authorization', `Bearer ${registerRes.body.accessToken}`)
+      .set('Authorization', `Bearer ${accessToken}`)
       .send({ currentPassword: password, newPassword: 'NewSecure2' })
       .expect(403)
       .expect((res) => {
@@ -229,6 +244,12 @@ describe('Auth (e2e)', () => {
       .send({ currentPassword: password, newPassword })
       .expect(200);
 
+    // The current access token is blacklisted on credential change.
+    await request(app.getHttpServer())
+      .get(`${API_V1}/auth/me`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(401);
+
     await request(app.getHttpServer())
       .post(`${API_V1}/auth/login`)
       .send({ email, password })
@@ -246,15 +267,7 @@ describe('Auth (e2e)', () => {
   });
 
   it('allows unverified users on auth allowlist routes but blocks other APIs', async () => {
-    const email = `${uniqueName('unverified')}@example.com`;
-    const password = 'SecurePass1';
-
-    const registerRes = await request(app.getHttpServer())
-      .post(`${API_V1}/auth/register`)
-      .send({ email, password })
-      .expect(201);
-
-    const { accessToken } = registerRes.body;
+    const { accessToken } = await registerAndLoginUser(app, 'unverified');
 
     await request(app.getHttpServer())
       .get(`${API_V1}/auth/me`)
@@ -350,6 +363,15 @@ describe('Auth (e2e)', () => {
         .post(`${API_V1}/auth/register`)
         .set('X-Auth-Client', 'web')
         .send({ email, password })
+        .expect(200)
+        .expect((res) => {
+          expect(res.body).toEqual({ success: true });
+        });
+
+      await agent
+        .post(`${API_V1}/auth/login`)
+        .set('X-Auth-Client', 'web')
+        .send({ email, password })
         .expect(201)
         .expect((res) => {
           expect(res.body.accessToken).toBeUndefined();
@@ -374,7 +396,7 @@ describe('Auth (e2e)', () => {
         .post(`${API_V1}/auth/register`)
         .set('X-Auth-Client', 'web')
         .send({ email, password })
-        .expect(201);
+        .expect(200);
 
       const loginRes = await agent
         .post(`${API_V1}/auth/login`)
@@ -414,15 +436,11 @@ describe('Auth (e2e)', () => {
     });
 
     it('returns standardized ApiErrorBody when CSRF token is missing on change-password', async () => {
-      const email = `${uniqueName('web-csrf-pw')}@example.com`;
-      const password = 'SecurePass1';
+      const { email, password } = await registerAndVerifyUser(
+        app,
+        'web-csrf-pw',
+      );
       const agent = request.agent(app.getHttpServer());
-
-      await agent
-        .post(`${API_V1}/auth/register`)
-        .set('X-Auth-Client', 'web')
-        .send({ email, password })
-        .expect(201);
 
       await agent
         .post(`${API_V1}/auth/login`)
@@ -451,6 +469,14 @@ describe('Auth (e2e)', () => {
 
       await request(app.getHttpServer())
         .post(`${API_V1}/auth/register`)
+        .send({ email, password })
+        .expect(200)
+        .expect((res) => {
+          expect(res.body).toEqual({ success: true });
+        });
+
+      await request(app.getHttpServer())
+        .post(`${API_V1}/auth/login`)
         .send({ email, password })
         .expect(201)
         .expect((res) => {

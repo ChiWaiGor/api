@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -25,6 +26,8 @@ import type {
 
 @Injectable()
 export class RbacService {
+  private readonly logger = new Logger(RbacService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
@@ -37,7 +40,17 @@ export class RbacService {
   }
 
   async invalidateUserPermissionCache(userId: string): Promise<void> {
-    await this.redis.del(redisKeys.permissionCache(userId));
+    try {
+      await this.redis.del(redisKeys.permissionCache(userId));
+    } catch (error) {
+      // The DB mutation has already committed; failing the request here would
+      // not undo it. Log loudly — stale grants persist for at most
+      // PERMISSION_CACHE_TTL_SECONDS.
+      this.logger.error(
+        `Failed to invalidate permission cache for user ${userId}; stale permissions possible until cache TTL expires`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 
   async getUserRoles(userId: string): Promise<string[]> {
@@ -268,20 +281,36 @@ export class RbacService {
   ) {
     await this.ensureUserExists(body.userId);
     const role = await this.getRoleOrThrow(body.roleId);
-    await this.assertCanUnassignRole(role);
 
-    try {
-      await this.prisma.userRole.delete({
-        where: {
-          userId_roleId: {
-            userId: body.userId,
-            roleId: body.roleId,
+    await this.prisma.$transaction(async (tx) => {
+      if (role.name === 'admin') {
+        // Lock the role row so concurrent unassigns serialize; otherwise two
+        // requests can both pass the last-admin count check and remove every
+        // admin assignment.
+        await tx.$queryRaw`SELECT "id" FROM "Role" WHERE "id" = ${role.id} FOR UPDATE`;
+        const adminAssignmentCount = await tx.userRole.count({
+          where: { roleId: role.id },
+        });
+        if (adminAssignmentCount <= 1) {
+          throw new BadRequestException(
+            'Cannot remove the last admin assignment',
+          );
+        }
+      }
+
+      try {
+        await tx.userRole.delete({
+          where: {
+            userId_roleId: {
+              userId: body.userId,
+              roleId: body.roleId,
+            },
           },
-        },
-      });
-    } catch {
-      throw new NotFoundException('User does not have this role');
-    }
+        });
+      } catch {
+        throw new NotFoundException('User does not have this role');
+      }
+    });
 
     await this.invalidateUserPermissionCache(body.userId);
 
@@ -357,19 +386,6 @@ export class RbacService {
       throw new BadRequestException(
         'Cannot detach protected permission from system role',
       );
-    }
-  }
-
-  private async assertCanUnassignRole(role: Role): Promise<void> {
-    if (role.name !== 'admin') {
-      return;
-    }
-
-    const adminAssignmentCount = await this.prisma.userRole.count({
-      where: { roleId: role.id },
-    });
-    if (adminAssignmentCount <= 1) {
-      throw new BadRequestException('Cannot remove the last admin assignment');
     }
   }
 

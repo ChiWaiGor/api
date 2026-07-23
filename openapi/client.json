@@ -4,17 +4,7 @@
     "/auth/register": {
       "post": {
         "operationId": "AuthController_register_v1",
-        "parameters": [
-          {
-            "name": "x-auth-client",
-            "in": "header",
-            "description": "Set to \"web\" for httpOnly cookie auth (browser). Omit or use \"mobile\" for Bearer tokens (native apps).",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -26,7 +16,7 @@
           }
         },
         "responses": {
-          "201": {
+          "200": {
             "description": ""
           },
           "400": {

@@ -161,10 +161,15 @@ export async function registerAndVerifyUser(
   const mailQueue = app.get(MailQueueService);
   const enqueueSpy = jest.spyOn(mailQueue, 'enqueueSend');
 
-  const registerRes = await request(app.getHttpServer())
+  // Registration returns a uniform success body (no tokens); clients verify
+  // the email and then log in.
+  await request(app.getHttpServer())
     .post(`${API_V1}/auth/register`)
     .send({ email, password })
-    .expect(201);
+    .expect(200)
+    .expect((res) => {
+      expect(res.body).toEqual({ success: true });
+    });
 
   const verificationCall = enqueueSpy.mock.calls.find(
     ([msg]) => msg.subject === 'Verify your email address' && msg.to === email,
@@ -179,8 +184,13 @@ export async function registerAndVerifyUser(
 
   enqueueSpy.mockRestore();
 
-  const accessToken = registerRes.body.accessToken as string;
-  const refreshToken = registerRes.body.refreshToken as string;
+  const loginRes = await request(app.getHttpServer())
+    .post(`${API_V1}/auth/login`)
+    .send({ email, password })
+    .expect(201);
+
+  const accessToken = loginRes.body.accessToken as string;
+  const refreshToken = loginRes.body.refreshToken as string;
 
   const meRes = await request(app.getHttpServer())
     .get(`${API_V1}/auth/me`)
@@ -196,5 +206,30 @@ export async function registerAndVerifyUser(
     accessToken,
     refreshToken,
     userId: meRes.body.id as string,
+  };
+}
+
+/** Registers an unverified user and returns login tokens. */
+export async function registerAndLoginUser(
+  app: INestApplication<App>,
+  prefix: string,
+  password = 'SecurePass1',
+): Promise<{ email: string; password: string; accessToken: string }> {
+  const email = `${uniqueName(prefix)}@example.com`;
+
+  await request(app.getHttpServer())
+    .post(`${API_V1}/auth/register`)
+    .send({ email, password })
+    .expect(200);
+
+  const loginRes = await request(app.getHttpServer())
+    .post(`${API_V1}/auth/login`)
+    .send({ email, password })
+    .expect(201);
+
+  return {
+    email,
+    password,
+    accessToken: loginRes.body.accessToken as string,
   };
 }

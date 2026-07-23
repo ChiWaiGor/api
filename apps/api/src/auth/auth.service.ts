@@ -1,12 +1,7 @@
-import {
-  ConflictException,
-  Injectable,
-  Logger,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { UserStatus } from '@prisma/client';
+import { Prisma, UserStatus } from '@prisma/client';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import { redisKeys } from '../common/constants/redis-keys';
 import { MailQueueService } from '@app/queue';
@@ -52,30 +47,53 @@ export class AuthService {
   ) {}
 
   async register(body: RegisterBody) {
+    // Hash before the existence check so response timing does not reveal
+    // whether the email is already registered.
+    const passwordHash = await this.crypto.hash(body.password);
+
     const existing = await this.prisma.user.findUnique({
       where: { email: body.email },
     });
     if (existing) {
-      throw new ConflictException('Unable to complete registration');
+      // Uniform response to prevent email enumeration; notify the account
+      // owner instead of leaking registration state to the caller.
+      if (!existing.deletedAt) {
+        await this.mailQueue.enqueueSend({
+          to: existing.email,
+          subject: 'You already have an account',
+          text: 'Someone tried to register with this email address. If this was you, log in with your existing password or use the password reset flow.',
+        });
+      }
+      return { success: true };
     }
 
-    const passwordHash = await this.crypto.hash(body.password);
     const userRole = await this.prisma.role.findUnique({
       where: { name: 'user' },
     });
 
-    const user = await this.prisma.user.create({
-      data: {
-        email: body.email,
-        passwordHash,
-        roles: userRole ? { create: [{ roleId: userRole.id }] } : undefined,
-      },
-      include: { roles: { include: { role: true } } },
-    });
+    let user: { id: string; email: string };
+    try {
+      user = await this.prisma.user.create({
+        data: {
+          email: body.email,
+          passwordHash,
+          roles: userRole ? { create: [{ roleId: userRole.id }] } : undefined,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        // Concurrent duplicate registration — same uniform response.
+        return { success: true };
+      }
+      throw error;
+    }
 
     await this.sendVerificationEmail(user);
 
-    return this.issueTokenPair(user.id, user.email);
+    return { success: true };
   }
 
   async login(body: LoginBody) {
@@ -111,7 +129,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    await this.clearFailedLogins(body.email);
+    await this.clearFailedLogins(body.email, user.id);
     recordLoginAttempt('success');
 
     return this.issueTokenPair(
@@ -170,10 +188,21 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
+    // Atomic conditional revoke: only one concurrent request can rotate a
+    // given token. A lost race means the token was just used elsewhere, which
+    // is indistinguishable from replay — revoke the whole family.
+    const rotated = await this.prisma.refreshToken.updateMany({
+      where: { id: stored.id, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    if (rotated.count !== 1) {
+      await this.revokeTokenFamily(stored.familyId);
+      this.logger.warn(
+        `Concurrent refresh detected for user ${stored.userId}; revoked token family ${stored.familyId}`,
+      );
+      recordRefreshAttempt('reuse_detected');
+      throw new UnauthorizedException('Invalid refresh token');
+    }
 
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
@@ -406,13 +435,19 @@ export class AuthService {
         infer: true,
       });
 
-      await this.prisma.passwordResetToken.create({
-        data: {
-          userId: user.id,
-          tokenHash,
-          expiresAt: new Date(Date.now() + ttlMinutes * 60_000),
-        },
-      });
+      // Invalidate prior unused reset tokens so only the latest link works.
+      await this.prisma.$transaction([
+        this.prisma.passwordResetToken.deleteMany({
+          where: { userId: user.id, usedAt: null },
+        }),
+        this.prisma.passwordResetToken.create({
+          data: {
+            userId: user.id,
+            tokenHash,
+            expiresAt: new Date(Date.now() + ttlMinutes * 60_000),
+          },
+        }),
+      ]);
 
       const link = this.buildLink('/reset-password', token);
       await this.mailQueue.enqueueSend({
@@ -425,7 +460,11 @@ export class AuthService {
     return { success: true };
   }
 
-  async changePassword(userId: string, body: ChangePasswordBody) {
+  async changePassword(
+    userId: string,
+    body: ChangePasswordBody,
+    accessJti?: string,
+  ) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || user.deletedAt) {
       throw new UnauthorizedException();
@@ -452,6 +491,12 @@ export class AuthService {
       }),
     ]);
 
+    // Revoke the current access token too — a credential change must not
+    // leave any previously issued token usable.
+    if (accessJti) {
+      await this.blacklistAccessToken(accessJti);
+    }
+
     return { success: true };
   }
 
@@ -467,25 +512,30 @@ export class AuthService {
 
     const passwordHash = await this.crypto.hash(body.newPassword);
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({
+    await this.prisma.$transaction(async (tx) => {
+      // Atomically claim the single-use token; a concurrent confirm with the
+      // same token loses the race and is rejected.
+      const claimed = await tx.passwordResetToken.updateMany({
+        where: { id: record.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count !== 1) {
+        throw new UnauthorizedException('Invalid or expired reset token');
+      }
+      await tx.user.update({
         where: { id: record.userId },
         data: {
           passwordHash,
           // A successful reset clears a lockout so the user regains access.
           status: UserStatus.ACTIVE,
         },
-      }),
-      this.prisma.passwordResetToken.update({
-        where: { id: record.id },
-        data: { usedAt: new Date() },
-      }),
+      });
       // Invalidate every existing refresh token on credential change.
-      this.prisma.refreshToken.updateMany({
+      await tx.refreshToken.updateMany({
         where: { userId: record.userId, revokedAt: null },
         data: { revokedAt: new Date() },
-      }),
-    ]);
+      });
+    });
 
     await this.clearFailedLoginsForUser(record.userId);
     await this.invalidateUserSessionStateCache(record.userId);
@@ -518,16 +568,22 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired verification token');
     }
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({
+    await this.prisma.$transaction(async (tx) => {
+      // Atomically claim the single-use token (see confirmPasswordReset).
+      const claimed = await tx.emailVerificationToken.updateMany({
+        where: { id: record.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count !== 1) {
+        throw new UnauthorizedException(
+          'Invalid or expired verification token',
+        );
+      }
+      await tx.user.update({
         where: { id: record.userId },
         data: { emailVerifiedAt: new Date() },
-      }),
-      this.prisma.emailVerificationToken.update({
-        where: { id: record.id },
-        data: { usedAt: new Date() },
-      }),
-    ]);
+      });
+    });
 
     await this.invalidateUserSessionStateCache(record.userId);
 
@@ -698,9 +754,19 @@ export class AuthService {
         windowSeconds,
       );
     } catch {
-      // Without Redis we cannot reliably count attempts; skip lockout
-      // bookkeeping rather than block the (already failing) login path.
-      return;
+      // Redis unavailable — fall back to a DB-backed counter so brute-force
+      // lockout never fails open. Unknown emails have no user row to count
+      // against (and cannot be locked anyway).
+      if (!userId) {
+        return;
+      }
+      try {
+        count = await this.incrementFailedLoginsInDb(userId, windowSeconds);
+      } catch {
+        // Both stores unavailable; do not block the (already failing) login
+        // path on bookkeeping.
+        return;
+      }
     }
 
     if (userId && count >= max) {
@@ -716,11 +782,54 @@ export class AuthService {
     }
   }
 
-  private async clearFailedLogins(email: string): Promise<void> {
+  /**
+   * Atomic UPDATE ... RETURNING that resets the counter when the lockout
+   * window has elapsed, otherwise increments it. Used only when Redis is
+   * unavailable so lockout does not fail open.
+   */
+  private async incrementFailedLoginsInDb(
+    userId: string,
+    windowSeconds: number,
+  ): Promise<number> {
+    const rows = await this.prisma.$queryRaw<{ failedLoginCount: number }[]>`
+      UPDATE "User"
+      SET
+        "failedLoginCount" = CASE
+          WHEN "failedLoginWindowStartedAt" IS NULL
+            OR "failedLoginWindowStartedAt" <= now() - make_interval(secs => ${windowSeconds})
+          THEN 1
+          ELSE "failedLoginCount" + 1
+        END,
+        "failedLoginWindowStartedAt" = CASE
+          WHEN "failedLoginWindowStartedAt" IS NULL
+            OR "failedLoginWindowStartedAt" <= now() - make_interval(secs => ${windowSeconds})
+          THEN now()
+          ELSE "failedLoginWindowStartedAt"
+        END
+      WHERE "id" = ${userId}
+      RETURNING "failedLoginCount"
+    `;
+    return rows[0]?.failedLoginCount ?? 0;
+  }
+
+  private async clearFailedLogins(
+    email: string,
+    userId?: string,
+  ): Promise<void> {
     try {
       await this.redis.del(redisKeys.failedLogins(email));
     } catch {
       // Best-effort reset of the failed-login counter.
+    }
+    if (userId) {
+      try {
+        await this.prisma.user.updateMany({
+          where: { id: userId, failedLoginCount: { gt: 0 } },
+          data: { failedLoginCount: 0, failedLoginWindowStartedAt: null },
+        });
+      } catch {
+        // Best-effort reset of the DB fallback counter.
+      }
     }
   }
 
@@ -730,7 +839,7 @@ export class AuthService {
       select: { email: true },
     });
     if (user) {
-      await this.clearFailedLogins(user.email);
+      await this.clearFailedLogins(user.email, userId);
     }
   }
 

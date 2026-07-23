@@ -155,6 +155,8 @@ export const envSchema = z
         const trimmed = v?.trim();
         return trimmed ? trimmed : undefined;
       }),
+    // Liveness endpoint for the background worker (it has no HTTP API).
+    WORKER_HEALTH_PORT: z.coerce.number().int().positive().default(8081),
     // Prometheus metrics scrape endpoint (separate HTTP server on METRICS_PORT).
     METRICS_ENABLED: z
       .string()
@@ -225,6 +227,59 @@ export const envSchema = z
         path: ['AUTH_COOKIE_SAME_SITE'],
         message:
           'AUTH_COOKIE_SAME_SITE cannot be "none" without AUTH_COOKIE_SECURE=true (browser requirement)',
+      });
+    }
+    // Reject placeholder/shared JWT secrets so .env.example values can never
+    // reach production.
+    const placeholderSecret = /change-?me|placeholder|example/i;
+    if (placeholderSecret.test(env.JWT_ACCESS_SECRET)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['JWT_ACCESS_SECRET'],
+        message:
+          'JWT_ACCESS_SECRET looks like a placeholder; set a real secret in production',
+      });
+    }
+    if (placeholderSecret.test(env.JWT_REFRESH_SECRET)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['JWT_REFRESH_SECRET'],
+        message:
+          'JWT_REFRESH_SECRET looks like a placeholder; set a real secret in production',
+      });
+    }
+    if (env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['JWT_REFRESH_SECRET'],
+        message:
+          'JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must differ in production',
+      });
+    }
+    // Swagger must never be exposed in production.
+    if (env.SWAGGER_ENABLED) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['SWAGGER_ENABLED'],
+        message: 'SWAGGER_ENABLED must be false in production',
+      });
+    }
+    // The log transport silently drops outbound mail (password reset, email
+    // verification) — never acceptable in production.
+    if (env.MAIL_TRANSPORT !== 'smtp') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MAIL_TRANSPORT'],
+        message: 'MAIL_TRANSPORT must be "smtp" in production',
+      });
+    }
+    // Email links must point at the real deployment, not a developer default.
+    const baseHost = new URL(env.APP_BASE_URL).hostname;
+    if (['localhost', '127.0.0.1', '::1', '[::1]'].includes(baseHost)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['APP_BASE_URL'],
+        message: 'APP_BASE_URL cannot point at localhost in production',
       });
     }
   });

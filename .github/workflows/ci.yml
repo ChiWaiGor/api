@@ -43,6 +43,7 @@ jobs:
       HUSKY: 0
       NODE_ENV: test
       DATABASE_URL: postgresql://app:app@localhost:5432/app?schema=public
+      DIRECT_URL: postgresql://app:app@localhost:5432/app?schema=public
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app
       POSTGRES_HOST: localhost
