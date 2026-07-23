@@ -33,6 +33,10 @@ model User {
   status                 UserStatus              @default(ACTIVE)
   emailVerifiedAt        DateTime?
   deletedAt              DateTime?
+  // DB-backed failed-login counter, used only when Redis is unavailable so
+  // account lockout does not fail open during a Redis outage.
+  failedLoginCount           Int       @default(0)
+  failedLoginWindowStartedAt DateTime?
   roles                  UserRole[]
   refreshTokens          RefreshToken[]
   passwordResetTokens    PasswordResetToken[]

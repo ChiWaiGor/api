@@ -44,6 +44,8 @@ describe('RbacService', () => {
       count: jest.fn(),
     },
     rolePermission: { create: jest.fn(), delete: jest.fn() },
+    $queryRaw: jest.fn(),
+    $transaction: jest.fn(),
   };
   const redis = {
     del: jest.fn(),
@@ -96,6 +98,12 @@ describe('RbacService', () => {
 
     service = module.get(RbacService);
     jest.clearAllMocks();
+    // Supports both the array form and the interactive-callback form.
+    prisma.$transaction.mockImplementation((arg: unknown) =>
+      typeof arg === 'function'
+        ? (arg as (tx: typeof prisma) => unknown)(prisma)
+        : Promise.all(arg as Promise<unknown>[]),
+    );
   });
 
   describe('listRoles', () => {
@@ -397,6 +405,43 @@ describe('RbacService', () => {
       ).resolves.toEqual({
         success: true,
       });
+    });
+
+    it('locks the admin role row so concurrent unassigns serialize', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 'u1' });
+      prisma.role.findUnique.mockResolvedValue(adminRole);
+      prisma.userRole.count.mockResolvedValue(2);
+      prisma.userRole.delete.mockResolvedValue({});
+
+      await service.unassignRoleFromUser(body, auditCtx);
+
+      expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
+      expect(prisma.$queryRaw).toHaveBeenCalled();
+    });
+
+    it('does not take the role lock for non-admin roles', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 'u1' });
+      prisma.role.findUnique.mockResolvedValue(customRole);
+      prisma.userRole.delete.mockResolvedValue({});
+
+      await service.unassignRoleFromUser(
+        { userId: 'u1', roleId: 'r1' },
+        auditCtx,
+      );
+
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
+      expect(prisma.userRole.count).not.toHaveBeenCalled();
+    });
+
+    it('succeeds even when permission cache invalidation fails', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 'u1' });
+      prisma.role.findUnique.mockResolvedValue(customRole);
+      prisma.userRole.delete.mockResolvedValue({});
+      redis.del.mockRejectedValue(new Error('redis down'));
+
+      await expect(
+        service.unassignRoleFromUser({ userId: 'u1', roleId: 'r1' }, auditCtx),
+      ).resolves.toEqual({ success: true });
     });
   });
 

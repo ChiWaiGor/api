@@ -78,7 +78,7 @@ The API supports two client profiles on the same routes.
 ### Bearer tokens (mobile / default)
 
 - Omit `X-Auth-Client` or send any value other than `web`.
-- `POST /api/v1/auth/login`, `register`, and `refresh` return tokens in the JSON body:
+- `POST /api/v1/auth/login` and `refresh` return tokens in the JSON body:
 
 ```json
 {
@@ -86,6 +86,11 @@ The API supports two client profiles on the same routes.
   "refreshToken": "<jwt>"
 }
 ```
+
+- `POST /api/v1/auth/register` returns `{ "success": true }` only (no tokens). Clients
+  verify the email (if required) and then call `login` to obtain tokens. Duplicate
+  registration returns the same `{ "success": true }` response to prevent email
+  enumeration.
 
 - Protected routes: `Authorization: Bearer <accessToken>`.
 - `refresh` / `logout` bodies may include `{ "refreshToken": "..." }`.
@@ -95,8 +100,10 @@ The API supports two client profiles on the same routes.
 For browser SPAs, send **`X-Auth-Client: web`** on:
 
 - `POST /api/v1/auth/login`
-- `POST /api/v1/auth/register`
 - `POST /api/v1/auth/refresh`
+
+Registration uses the same uniform `{ "success": true }` body for web and mobile; use
+`login` after verifying email to receive cookies.
 
 The server sets cookies (see `apps/api/src/auth/auth-cookie.service.ts`) and returns
 **`{}`** in the body (no tokens in JSON).
@@ -152,7 +159,8 @@ Responses are **raw DTOs** (no `{ data: ... }` envelope).
 
 | Operation type                                                          | Mobile (Bearer)                 | Web (`X-Auth-Client: web`)                               |
 | ----------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------- |
-| login / register / refresh                                              | `{ accessToken, refreshToken }` | `{}`                                                     |
+| register                                                                | `{ "success": true }`           | `{ "success": true }`                                    |
+| login / refresh                                                         | `{ accessToken, refreshToken }` | `{}`                                                     |
 | logout, password reset, email verification, RBAC mutations, user delete | `{ "success": true }`           | same                                                     |
 | `GET /auth/me`, user/role reads                                         | Resource DTO                    | same (cookies authenticate)                              |
 | `GET /auth/sessions`                                                    | `{ sessions: [...] }`           | same                                                     |

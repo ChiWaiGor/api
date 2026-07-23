@@ -56,20 +56,12 @@ export class AuthController {
   @CsrfExempt()
   @SkipThrottle({ default: true })
   @Throttle({ auth: {} })
-  @ApiHeader({
-    name: AUTH_CLIENT_HEADER,
-    required: false,
-    description:
-      'Set to "web" for httpOnly cookie auth (browser). Omit or use "mobile" for Bearer tokens (native apps).',
-  })
+  @HttpCode(HttpStatus.OK)
   @Post('register')
-  async register(
-    @Body() body: RegisterBodyDto,
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ): Promise<AuthTokensResponseDto> {
-    const tokens = await this.authService.register(body);
-    return this.deliverTokens(req, res, tokens);
+  register(@Body() body: RegisterBodyDto): Promise<SuccessResponseDto> {
+    // Uniform response regardless of whether the email is already registered
+    // (prevents enumeration). Verify the email, then log in for tokens.
+    return this.authService.register(body);
   }
 
   @Public()
@@ -259,11 +251,23 @@ export class AuthController {
   @Throttle({ auth: {} })
   @HttpCode(HttpStatus.OK)
   @Post('change-password')
-  changePassword(
+  async changePassword(
     @Body() body: ChangePasswordDto,
-    @CurrentUser() user: { sub: string },
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @CurrentUser() user: { sub: string; jti: string },
   ): Promise<SuccessResponseDto> {
-    return this.authService.changePassword(user.sub, body);
+    const result = await this.authService.changePassword(
+      user.sub,
+      body,
+      user.jti,
+    );
+    // All tokens (including the current access token) are revoked; drop the
+    // now-dead cookies so web clients are cleanly signed out.
+    if (isWebAuthClient(req) || this.authCookies.hasAuthCookies(req)) {
+      this.authCookies.clearAuthCookies(res);
+    }
+    return result;
   }
 
   private deliverTokens(
