@@ -15,6 +15,7 @@ fi
 : "${POSTGRES_E2E_DB:=app_e2e}"
 
 export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_E2E_DB}?schema=public"
+export DIRECT_URL="${DATABASE_URL}"
 
 npm run prisma:deploy
 npm run prisma:seed

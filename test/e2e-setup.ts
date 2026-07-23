@@ -33,6 +33,7 @@ if (process.env.POSTGRES_E2E_DB) {
   const host = process.env.POSTGRES_HOST ?? 'localhost';
   const port = process.env.POSTGRES_PORT ?? '5432';
   process.env.DATABASE_URL = `postgresql://${user}:${pass}@${host}:${port}/${process.env.POSTGRES_E2E_DB}?schema=public`;
+  process.env.DIRECT_URL = process.env.DATABASE_URL;
 }
 
 if (process.env.NODE_ENV === 'production') {

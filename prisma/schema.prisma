@@ -5,6 +5,9 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Direct (non-pooled) connection for migrations/introspection. Required when
+  // DATABASE_URL points at PgBouncer in transaction-pooling mode.
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserStatus {
