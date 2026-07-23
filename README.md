@@ -205,7 +205,12 @@ docker compose run --rm seed-admin        # bootstrap admin (first deploy only)
 docker compose up -d app worker           # API on http://localhost:${APP_PORT:-3000}
 ```
 
-**Routine releases** (no schema or permission catalog changes): run `migrate` only, then roll the app.
+The **worker** processes outbound mail (password reset, email verification) from
+the BullMQ queue. Set `MAIL_TRANSPORT=smtp` and your SMTP credentials in `.env`
+for production; the compose `worker` service defaults to Mailpit for local
+testing. Scale API and worker independently as needed.
+
+**Routine releases** (no schema or permission catalog changes): run `migrate` only, then roll `app` and `worker`.
 
 **Releases with new permissions** in code: `migrate` → `seed-catalog` → roll app.
 
