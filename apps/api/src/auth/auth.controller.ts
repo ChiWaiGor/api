@@ -13,12 +13,15 @@ import {
   Res,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
-import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AllowUnverifiedEmail } from '../common/decorators/allow-unverified-email.decorator';
 import { ApiErrorResponses } from '../common/decorators/api-error-responses.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import {
+  AuthRefreshThrottle,
+  AuthThrottle,
+} from '../common/throttler/auth-throttle.decorators';
 import { AuthCookieService } from './auth-cookie.service';
 import { AuthService } from './auth.service';
 import { AUTH_CLIENT_HEADER } from './constants/auth-cookies.constants';
@@ -54,8 +57,7 @@ export class AuthController {
 
   @Public()
   @CsrfExempt()
-  @SkipThrottle({ default: true })
-  @Throttle({ auth: {} })
+  @AuthThrottle()
   @HttpCode(HttpStatus.OK)
   @Post('register')
   register(@Body() body: RegisterBodyDto): Promise<SuccessResponseDto> {
@@ -66,8 +68,7 @@ export class AuthController {
 
   @Public()
   @CsrfExempt()
-  @SkipThrottle({ default: true })
-  @Throttle({ auth: {} })
+  @AuthThrottle()
   @ApiHeader({
     name: AUTH_CLIENT_HEADER,
     required: false,
@@ -85,8 +86,7 @@ export class AuthController {
   }
 
   @Public()
-  @SkipThrottle({ default: true })
-  @Throttle({ 'auth-refresh': {} })
+  @AuthRefreshThrottle()
   @ApiHeader({
     name: AUTH_CLIENT_HEADER,
     required: false,
@@ -123,8 +123,7 @@ export class AuthController {
 
   @Public()
   @CsrfExempt()
-  @SkipThrottle({ default: true })
-  @Throttle({ auth: {} })
+  @AuthThrottle()
   @HttpCode(HttpStatus.OK)
   @Post('password-reset/request')
   requestPasswordReset(
@@ -135,8 +134,7 @@ export class AuthController {
 
   @Public()
   @CsrfExempt()
-  @SkipThrottle({ default: true })
-  @Throttle({ auth: {} })
+  @AuthThrottle()
   @HttpCode(HttpStatus.OK)
   @Post('password-reset/confirm')
   confirmPasswordReset(
@@ -147,8 +145,7 @@ export class AuthController {
 
   @AllowUnverifiedEmail()
   @ApiBearerAuth()
-  @SkipThrottle({ default: true })
-  @Throttle({ auth: {} })
+  @AuthThrottle()
   @HttpCode(HttpStatus.OK)
   @Post('email-verification/request')
   requestEmailVerification(
@@ -159,8 +156,7 @@ export class AuthController {
 
   @Public()
   @CsrfExempt()
-  @SkipThrottle({ default: true })
-  @Throttle({ auth: {} })
+  @AuthThrottle()
   @HttpCode(HttpStatus.OK)
   @Post('email-verification/confirm')
   confirmEmailVerification(
@@ -247,8 +243,7 @@ export class AuthController {
   }
 
   @ApiBearerAuth()
-  @SkipThrottle({ default: true })
-  @Throttle({ auth: {} })
+  @AuthThrottle()
   @HttpCode(HttpStatus.OK)
   @Post('change-password')
   async changePassword(

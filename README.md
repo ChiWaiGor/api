@@ -283,11 +283,16 @@ Mutations (create/update/delete roles, assign/unassign, attach/detach permission
 
 ## Rate limiting
 
-| Variable                                    | Default                  | Scope                                                   |
-| ------------------------------------------- | ------------------------ | ------------------------------------------------------- |
-| `THROTTLE_TTL` / `THROTTLE_LIMIT`           | required                 | Global default for protected routes                     |
-| `THROTTLE_AUTH_TTL` / `THROTTLE_AUTH_LIMIT` | 60000 ms / 10            | `POST /api/v1/auth/register`, `POST /api/v1/auth/login` |
-| (derived)                                   | 2× `THROTTLE_AUTH_LIMIT` | `POST /api/v1/auth/refresh`                             |
+| Variable                                    | Default                  | Scope                                                                                     |
+| ------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------- |
+| `THROTTLE_TTL` / `THROTTLE_LIMIT`           | required                 | Global `default` throttler on all routes (unless skipped)                                 |
+| `THROTTLE_AUTH_TTL` / `THROTTLE_AUTH_LIMIT` | 60000 ms / 10            | Opt-in `auth` throttler (`@AuthThrottle()` on login, register, password reset, etc.)      |
+| (derived)                                   | 2× `THROTTLE_AUTH_LIMIT` | Opt-in `auth-refresh` throttler (`@AuthRefreshThrottle()` on `POST /api/v1/auth/refresh`) |
+
+Named `auth` / `auth-refresh` throttlers are **opt-in**: Nest would otherwise apply
+every named throttler to every route. Routes opt in with `@Throttle({ auth: {} })`
+(via `@AuthThrottle()` / `@AuthRefreshThrottle()`), which also skips `default` and
+the sibling auth bucket.
 
 Throttling counters are stored in **Redis** so limits are enforced consistently
 across multiple instances (the default in-memory store counts per process). If

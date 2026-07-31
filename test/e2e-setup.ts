@@ -13,6 +13,8 @@ if (existsSync(localEnv)) {
 /**
  * E2E runs many auth endpoints in one suite; use a higher auth throttle limit
  * than production so register/login tests are not flaky (default is 10/min).
+ * throttle.e2e-spec.ts overrides this for a dedicated low-limit suite and
+ * restores it afterward.
  */
 process.env.THROTTLE_AUTH_LIMIT = '100';
 
