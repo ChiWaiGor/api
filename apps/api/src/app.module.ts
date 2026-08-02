@@ -23,6 +23,7 @@ import { ZodValidationExceptionFilter } from './common/filters/zod-validation-ex
 import { EmailVerifiedGuard } from './common/guards/email-verified.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
+import { skipUnlessNamedThrottlerOptedIn } from './common/throttler/named-throttler.util';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler-storage';
 import { HealthModule } from './health/health.module';
 import { HttpMetricsInterceptor } from './observability/http-metrics.interceptor';
@@ -66,6 +67,9 @@ import { UsersModule } from './users/users.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env, true>) => ({
+        // `default` applies globally. `auth` / `auth-refresh` are opt-in via
+        // @Throttle (see AuthThrottle / AuthRefreshThrottle decorators) —
+        // Nest applies every named throttler unless skipIf skips it.
         throttlers: [
           {
             name: 'default',
@@ -76,11 +80,13 @@ import { UsersModule } from './users/users.module';
             name: 'auth',
             ttl: config.get('THROTTLE_AUTH_TTL', { infer: true }),
             limit: config.get('THROTTLE_AUTH_LIMIT', { infer: true }),
+            skipIf: skipUnlessNamedThrottlerOptedIn('auth'),
           },
           {
             name: 'auth-refresh',
             ttl: config.get('THROTTLE_AUTH_TTL', { infer: true }),
             limit: config.get('THROTTLE_AUTH_LIMIT', { infer: true }) * 2,
+            skipIf: skipUnlessNamedThrottlerOptedIn('auth-refresh'),
           },
         ],
         storage: new RedisThrottlerStorage(

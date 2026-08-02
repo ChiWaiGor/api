@@ -24,12 +24,12 @@ flowchart TD
   Perm -->|missing permission| Forbidden403b[403 Insufficient permissions]
 ```
 
-| Guard                | Purpose                                | Opt-out decorators                                                                          |
-| -------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `ThrottlerGuard`     | Rate limits (Redis-backed)             | `@SkipThrottle()`, `@Throttle({ auth: {} })` on auth routes                                 |
-| `JwtAuthGuard`       | JWT authentication                     | `@Public()`                                                                                 |
-| `EmailVerifiedGuard` | Deny unverified users on domain routes | `@Public()`, `@AllowUnverifiedEmail()`                                                      |
-| `PermissionsGuard`   | RBAC enforcement                       | Omit `@RequirePermissions` for routes with no permission requirement (guard passes through) |
+| Guard                | Purpose                                | Opt-out decorators                                                                                                                  |
+| -------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `ThrottlerGuard`     | Rate limits (Redis-backed)             | `default` applies globally; use `@AuthThrottle()` / `@AuthRefreshThrottle()` to opt into stricter auth buckets (and skip `default`) |
+| `JwtAuthGuard`       | JWT authentication                     | `@Public()`                                                                                                                         |
+| `EmailVerifiedGuard` | Deny unverified users on domain routes | `@Public()`, `@AllowUnverifiedEmail()`                                                                                              |
+| `PermissionsGuard`   | RBAC enforcement                       | Omit `@RequirePermissions` for routes with no permission requirement (guard passes through)                                         |
 
 **Do not** add `@UseGuards(JwtAuthGuard, PermissionsGuard)` on controllers — guards are global. Use decorators on individual routes instead.
 
